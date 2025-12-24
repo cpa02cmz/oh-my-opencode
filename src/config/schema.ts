@@ -24,6 +24,8 @@ export const BuiltinAgentNameSchema = z.enum([
   "frontend-ui-ux-engineer",
   "document-writer",
   "multimodal-looker",
+  "unity-engineer",
+  "unity-spatial-engineer",
 ])
 
 export const OverridableAgentNameSchema = z.enum([
@@ -37,6 +39,8 @@ export const OverridableAgentNameSchema = z.enum([
   "frontend-ui-ux-engineer",
   "document-writer",
   "multimodal-looker",
+  "unity-engineer",
+  "unity-spatial-engineer",
 ])
 
 export const AgentNameSchema = BuiltinAgentNameSchema
@@ -63,6 +67,8 @@ export const HookNameSchema = z.enum([
   "non-interactive-env",
   "interactive-bash-session",
   "empty-message-sanitizer",
+  "unity-anti-pattern-checker",
+  "unity-context-injector",
 ])
 
 export const AgentOverrideConfigSchema = z.object({
@@ -92,6 +98,8 @@ export const AgentOverridesSchema = z.object({
   "frontend-ui-ux-engineer": AgentOverrideConfigSchema.optional(),
   "document-writer": AgentOverrideConfigSchema.optional(),
   "multimodal-looker": AgentOverrideConfigSchema.optional(),
+  "unity-engineer": AgentOverrideConfigSchema.optional(),
+  "unity-spatial-engineer": AgentOverrideConfigSchema.optional(),
 })
 
 export const ClaudeCodeConfigSchema = z.object({

@@ -21,3 +21,5 @@ export { createKeywordDetectorHook } from "./keyword-detector";
 export { createNonInteractiveEnvHook } from "./non-interactive-env";
 export { createInteractiveBashSessionHook } from "./interactive-bash-session";
 export { createEmptyMessageSanitizerHook } from "./empty-message-sanitizer";
+export { createUnityAntiPatternCheckerHook } from "./unity-anti-pattern-checker";
+export { createUnityContextInjectorHook } from "./unity-context-injector";
