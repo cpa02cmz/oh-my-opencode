@@ -130,6 +130,14 @@ function loadConfigFromPath(configPath: string): OhMyOpenCodeConfig | null {
         const errorMsg = result.error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join(", ");
         log(`Config validation error in ${configPath}:`, result.error.issues);
         addConfigLoadError({ path: configPath, error: `Validation error: ${errorMsg}` });
+        
+        console.error(`\n❌ OhMyOpenCode: Failed to load config from ${configPath}`);
+        console.error(`   Validation errors:`);
+        for (const issue of result.error.issues) {
+          console.error(`   - ${issue.path.join(".")}: ${issue.message}`);
+        }
+        console.error(`   Config will be ignored. Please fix the errors above.\n`);
+        
         return null;
       }
 
@@ -140,6 +148,13 @@ function loadConfigFromPath(configPath: string): OhMyOpenCodeConfig | null {
     const errorMsg = err instanceof Error ? err.message : String(err);
     log(`Error loading config from ${configPath}:`, err);
     addConfigLoadError({ path: configPath, error: errorMsg });
+    
+    console.error(`\n❌ OhMyOpenCode: Failed to load config from ${configPath}`);
+    console.error(`   Error: ${errorMsg}`);
+    if (err instanceof SyntaxError) {
+      console.error(`   Hint: Check for syntax errors in your JSON file (missing commas, quotes, brackets, etc.)`);
+    }
+    console.error(`   Config will be ignored. Please fix the error above.\n`);
   }
   return null;
 }
