@@ -6,6 +6,9 @@
  * implementation and execution.
  *
  * Inspired by OpenCode's build agent behavior.
+ * 
+ * @see https://github.com/sst/opencode/blob/6f9bea4e1f3d139feefd0f88de260b04f78caaef/packages/opencode/src/session/prompt/build-switch.txt
+ * @see https://github.com/sst/opencode/blob/6f9bea4e1f3d139feefd0f88de260b04f78caaef/packages/opencode/src/agent/agent.ts#L118-L125
  */
 export const BUILD_SYSTEM_PROMPT = `<system-reminder>
 # Build Mode - System Reminder
@@ -54,6 +57,9 @@ deliver excellent results.
  * - webfetch: "allow" - Can fetch web content
  *
  * This provides balanced permissions - powerful but with safety checks.
+ * 
+ * @see https://github.com/sst/opencode/blob/6f9bea4e1f3d139feefd0f88de260b04f78caaef/packages/opencode/src/agent/agent.ts#L57-L68
+ * @see https://github.com/sst/opencode/blob/6f9bea4e1f3d139feefd0f88de260b04f78caaef/packages/opencode/src/agent/agent.ts#L118-L125
  */
 export const BUILD_PERMISSION = {
   edit: "ask" as const,
