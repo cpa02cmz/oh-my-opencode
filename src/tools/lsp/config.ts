@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
+import { parseJsonc } from "../../shared"
 import { BUILTIN_SERVERS, EXT_TO_LANG } from "./constants"
 
 export interface ResolvedServer {
@@ -34,7 +35,7 @@ interface ServerWithSource extends ResolvedServer {
 function loadJsonFile<T>(path: string): T | null {
   if (!existsSync(path)) return null
   try {
-    return JSON.parse(readFileSync(path, "utf-8")) as T
+    return parseJsonc<T>(readFileSync(path, "utf-8"))
   } catch {
     return null
   }

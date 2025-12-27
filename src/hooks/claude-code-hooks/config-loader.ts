@@ -2,7 +2,7 @@ import { existsSync } from "fs"
 import { homedir } from "os"
 import { join } from "path"
 import type { ClaudeHookEvent } from "./types"
-import { log } from "../../shared/logger"
+import { log, parseJsonc } from "../../shared"
 
 export interface DisabledHooksConfig {
   Stop?: string[]
@@ -29,7 +29,7 @@ async function loadConfigFromPath(path: string): Promise<PluginExtendedConfig | 
 
   try {
     const content = await Bun.file(path).text()
-    return JSON.parse(content) as PluginExtendedConfig
+    return parseJsonc<PluginExtendedConfig>(content)
   } catch (error) {
     log("Failed to load config", { path, error })
     return null

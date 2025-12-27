@@ -1,6 +1,6 @@
 import { join } from "path"
 import { existsSync } from "fs"
-import { getClaudeConfigDir } from "../../shared"
+import { getClaudeConfigDir, parseJsonc } from "../../shared"
 import type { ClaudeHooksConfig, HookMatcher, HookCommand } from "./types"
 
 interface RawHookMatcher {
@@ -88,7 +88,7 @@ export async function loadClaudeHooksConfig(
     if (existsSync(settingsPath)) {
       try {
         const content = await Bun.file(settingsPath).text()
-        const settings = JSON.parse(content) as { hooks?: RawClaudeHooksConfig }
+        const settings = parseJsonc<{ hooks?: RawClaudeHooksConfig }>(content)
         if (settings.hooks) {
           const normalizedHooks = normalizeHooksConfig(settings.hooks)
           mergedConfig = mergeHooksConfig(mergedConfig, normalizedHooks)

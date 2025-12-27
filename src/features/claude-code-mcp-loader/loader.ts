@@ -1,6 +1,6 @@
 import { existsSync } from "fs"
 import { join } from "path"
-import { getClaudeConfigDir } from "../../shared"
+import { getClaudeConfigDir, parseJsonc } from "../../shared"
 import type {
   ClaudeCodeMcpConfig,
   LoadedMcpServer,
@@ -20,8 +20,11 @@ function getMcpConfigPaths(): McpConfigPath[] {
   const cwd = process.cwd()
 
   return [
+    { path: join(claudeConfigDir, ".mcp.jsonc"), scope: "user" },
     { path: join(claudeConfigDir, ".mcp.json"), scope: "user" },
+    { path: join(cwd, ".mcp.jsonc"), scope: "project" },
     { path: join(cwd, ".mcp.json"), scope: "project" },
+    { path: join(cwd, ".claude", ".mcp.jsonc"), scope: "local" },
     { path: join(cwd, ".claude", ".mcp.json"), scope: "local" },
   ]
 }
@@ -35,7 +38,7 @@ async function loadMcpConfigFile(
 
   try {
     const content = await Bun.file(filePath).text()
-    return JSON.parse(content) as ClaudeCodeMcpConfig
+    return parseJsonc<ClaudeCodeMcpConfig>(content)
   } catch (error) {
     log(`Failed to load MCP config from ${filePath}`, error)
     return null
