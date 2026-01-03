@@ -33,7 +33,11 @@ export interface CommandResult {
 export interface ExecuteHookOptions {
   forceZsh?: boolean
   zshPath?: string
+  /** Timeout in milliseconds. Default: 30000 (30 seconds) */
+  timeout?: number
 }
+
+const DEFAULT_HOOK_TIMEOUT_MS = 30_000
 
 /**
  * Execute a hook command with stdin input
@@ -62,6 +66,8 @@ export async function executeHookCommand(
     }
   }
 
+  const timeout = options?.timeout ?? DEFAULT_HOOK_TIMEOUT_MS
+
   return new Promise((resolve) => {
     const proc = spawn(finalCommand, {
       cwd,
@@ -71,6 +77,18 @@ export async function executeHookCommand(
 
     let stdout = ""
     let stderr = ""
+    let resolved = false
+
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true
+        proc.kill("SIGKILL")
+        resolve({
+          exitCode: 124,
+          stderr: `Hook command timed out after ${timeout}ms`,
+        })
+      }
+    }, timeout)
 
     proc.stdout?.on("data", (data) => {
       stdout += data.toString()
@@ -84,18 +102,26 @@ export async function executeHookCommand(
     proc.stdin?.end()
 
     proc.on("close", (code) => {
-      resolve({
-        exitCode: code ?? 0,
-        stdout: stdout.trim(),
-        stderr: stderr.trim(),
-      })
+      if (!resolved) {
+        resolved = true
+        clearTimeout(timeoutId)
+        resolve({
+          exitCode: code ?? 0,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+        })
+      }
     })
 
     proc.on("error", (err) => {
-      resolve({
-        exitCode: 1,
-        stderr: err.message,
-      })
+      if (!resolved) {
+        resolved = true
+        clearTimeout(timeoutId)
+        resolve({
+          exitCode: 1,
+          stderr: err.message,
+        })
+      }
     })
   })
 }

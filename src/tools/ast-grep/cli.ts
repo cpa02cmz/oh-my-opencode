@@ -114,7 +114,7 @@ export async function runSg(options: RunOptions): Promise<SgResult> {
 
   try {
     stdout = await Promise.race([new Response(proc.stdout).text(), timeoutPromise])
-    stderr = await new Response(proc.stderr).text()
+    stderr = await Promise.race([new Response(proc.stderr).text(), timeoutPromise])
     exitCode = await proc.exited
   } catch (e) {
     const error = e as Error

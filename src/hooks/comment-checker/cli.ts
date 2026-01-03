@@ -145,6 +145,8 @@ export interface CheckResult {
   message: string
 }
 
+const DEFAULT_COMMENT_CHECKER_TIMEOUT_MS = 10_000
+
 /**
  * Run comment-checker CLI with given input.
  * @param input Hook input to check
@@ -179,12 +181,19 @@ export async function runCommentChecker(input: HookInput, cliPath?: string, cust
       stderr: "pipe",
     })
 
-    // Write JSON to stdin
     proc.stdin.write(jsonInput)
     proc.stdin.end()
 
-    const stdout = await new Response(proc.stdout).text()
-    const stderr = await new Response(proc.stderr).text()
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      const id = setTimeout(() => {
+        proc.kill()
+        reject(new Error(`Comment checker timed out after ${DEFAULT_COMMENT_CHECKER_TIMEOUT_MS}ms`))
+      }, DEFAULT_COMMENT_CHECKER_TIMEOUT_MS)
+      proc.exited.then(() => clearTimeout(id))
+    })
+
+    const stdout = await Promise.race([new Response(proc.stdout).text(), timeoutPromise])
+    const stderr = await Promise.race([new Response(proc.stderr).text(), timeoutPromise])
     const exitCode = await proc.exited
 
     debugLog("exit code:", exitCode, "stdout length:", stdout.length, "stderr length:", stderr.length)
@@ -194,11 +203,9 @@ export async function runCommentChecker(input: HookInput, cliPath?: string, cust
     }
 
     if (exitCode === 2) {
-      // Comments detected - message is in stderr
       return { hasComments: true, message: stderr }
     }
 
-    // Error case
     debugLog("unexpected exit code:", exitCode, "stderr:", stderr)
     return { hasComments: false, message: "" }
   } catch (err) {
