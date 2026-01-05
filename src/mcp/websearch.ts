@@ -1,5 +1,5 @@
 export const websearch = {
-  command: "uvx",
-  args: ["duckduckgo-mcp-server"],
+  type: "remote" as const,
+  url: "https://server.smithery.ai/@nickclyde/duckduckgo-mcp-server",
   enabled: true,
 }
