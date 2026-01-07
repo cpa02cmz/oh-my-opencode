@@ -103,6 +103,12 @@ jobs:
           echo "=== package.json scripts ==="
           cat package.json | jq '.scripts'
 
+      - name: Bump Version
+        run: bun run script/bump-version.ts
+        env:
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+
       - name: Build
         run: |
           echo "=== Running bun build (main) ==="
