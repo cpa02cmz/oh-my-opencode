@@ -8,7 +8,7 @@ import { LSPServerUnavailableError, LSPServerExitedError, isSpawnError } from ".
 /**
  * Server availability status for tracking failed servers
  */
-type ServerStatus = "available" | "unavailable" | "failed"
+type ServerStatus = "available" | "unavailable"
 
 interface ServerState {
   status: ServerStatus
@@ -174,7 +174,16 @@ class LSPServerManager {
     let managed = this.clients.get(key)
     if (managed) {
       if (managed.initPromise) {
-        await managed.initPromise
+        try {
+          await managed.initPromise
+        } catch (error) {
+          // Concurrent init failed - remove stale entry and mark unavailable
+          this.clients.delete(key)
+          if (error instanceof LSPServerUnavailableError || error instanceof LSPServerExitedError) {
+            this.markServerUnavailable(key, error.message)
+          }
+          throw error
+        }
       }
       if (managed.client.isAlive()) {
         managed.refCount++
@@ -375,10 +384,12 @@ export class LSPClient {
       .then((code) => {
         this.processExited = true
         this.stdinWritable = false
+        this.rejectAllPending(`LSP server exited with code ${code}`)
       })
-      .catch(() => {
+      .catch((err) => {
         this.processExited = true
         this.stdinWritable = false
+        this.rejectAllPending(`LSP server process error: ${err}`)
       })
 
     this.startReading()
