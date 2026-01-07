@@ -1,6 +1,7 @@
 # Dependencies
 .sisyphus/
 node_modules/
+__pycache__
 
 # Build output
 dist/
@@ -22,6 +23,7 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+jobs
 
 # Lock files (use bun.lockb instead)
 package-lock.json
