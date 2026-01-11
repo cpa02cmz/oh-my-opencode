@@ -188,8 +188,9 @@ describe("migrateConfigFile", () => {
   })
 
   test("does not write if no migration needed", () => {
-    // #given: Config with current names
+    // #given: Config with current names and schema version
     const rawConfig: Record<string, unknown> = {
+      _schemaVersion: 1,
       sisyphus_agent: { disabled: false },
       agents: {
         Sisyphus: { model: "test" },
@@ -445,6 +446,154 @@ describe("shouldDeleteAgentConfig", () => {
   })
 })
 
+describe("migration tracking and idempotency", () => {
+  const cleanupPaths: string[] = []
+
+  afterEach(() => {
+    cleanupPaths.forEach((p) => {
+      try {
+        fs.unlinkSync(p)
+      } catch {
+      }
+    })
+  })
+
+  test("adds _schemaVersion on first migration", () => {
+    // #given: Config without _schemaVersion field
+    const testConfigPath = "/tmp/test-config-version-add.json"
+    const rawConfig: Record<string, unknown> = {
+      agents: {
+        oracle: { model: "openai/gpt-5.2" },
+      },
+    }
+
+    fs.writeFileSync(testConfigPath, JSON.stringify(rawConfig, null, 2))
+    cleanupPaths.push(testConfigPath)
+
+    // #when: Migrate config file
+    const needsWrite = migrateConfigFile(testConfigPath, rawConfig)
+
+    // #then: _schemaVersion should be added
+    expect(needsWrite).toBe(true)
+    expect(rawConfig._schemaVersion).toBe(1)
+
+    const writtenConfig = JSON.parse(fs.readFileSync(testConfigPath, "utf-8"))
+    expect(writtenConfig._schemaVersion).toBe(1)
+
+    const dir = path.dirname(testConfigPath)
+    const basename = path.basename(testConfigPath)
+    const files = fs.readdirSync(dir)
+    const backupFiles = files.filter((f) => f.startsWith(`${basename}.bak.`))
+    backupFiles.forEach((f) => cleanupPaths.push(path.join(dir, f)))
+  })
+
+  test("skips migration when _schemaVersion is present", () => {
+    // #given: Config with _schemaVersion already set
+    const testConfigPath = "/tmp/test-config-version-skip.json"
+    const testDir = path.dirname(testConfigPath)
+    const testBasename = path.basename(testConfigPath)
+    
+    const oldBackups = fs.readdirSync(testDir).filter((f) => f.startsWith(`${testBasename}.bak.`))
+    oldBackups.forEach((f) => {
+      try {
+        fs.unlinkSync(path.join(testDir, f))
+      } catch {}
+    })
+
+    const rawConfig: Record<string, unknown> = {
+      _schemaVersion: 1,
+      agents: {
+        oracle: { model: "openai/gpt-5.2" },
+      },
+    }
+
+    fs.writeFileSync(testConfigPath, JSON.stringify(rawConfig, null, 2))
+    cleanupPaths.push(testConfigPath)
+
+    // #when: Migrate config file
+    const needsWrite = migrateConfigFile(testConfigPath, rawConfig)
+
+    // #then: Migration should be skipped, no write needed
+    expect(needsWrite).toBe(false)
+    expect(rawConfig._schemaVersion).toBe(1)
+
+    const agents = rawConfig.agents as Record<string, Record<string, unknown>>
+    expect(agents.oracle.model).toBe("openai/gpt-5.2")
+
+    const files = fs.readdirSync(testDir)
+    const backupFiles = files.filter((f) => f.startsWith(`${testBasename}.bak.`))
+    expect(backupFiles.length).toBe(0)
+  })
+
+  test("preserves user-configured agents even if they match defaults", () => {
+    // #given: Config with user-set agent that matches category defaults
+    const testConfigPath = "/tmp/test-config-preserve.json"
+    const rawConfig: Record<string, unknown> = {
+      agents: {
+        oracle: {
+          model: "openai/gpt-5.2",
+          temperature: 0.1, // Matches ultrabrain defaults
+        },
+      },
+    }
+
+    fs.writeFileSync(testConfigPath, JSON.stringify(rawConfig, null, 2))
+    cleanupPaths.push(testConfigPath)
+
+    // #when: Migrate config file
+    const needsWrite = migrateConfigFile(testConfigPath, rawConfig)
+
+    // #then: Agent should be preserved with category, not deleted
+    expect(needsWrite).toBe(true)
+
+    const writtenConfig = JSON.parse(fs.readFileSync(testConfigPath, "utf-8"))
+    const agents = writtenConfig.agents as Record<string, unknown>
+    expect(agents.oracle).toBeDefined()
+    expect((agents.oracle as Record<string, unknown>).category).toBe("ultrabrain")
+    expect((agents.oracle as Record<string, unknown>).temperature).toBe(0.1)
+
+    const dir = path.dirname(testConfigPath)
+    const basename = path.basename(testConfigPath)
+    const files = fs.readdirSync(dir)
+    const backupFiles = files.filter((f) => f.startsWith(`${basename}.bak.`))
+    backupFiles.forEach((f) => cleanupPaths.push(path.join(dir, f)))
+  })
+
+  test("migration is idempotent - second run does nothing", () => {
+    // #given: Config that was just migrated
+    const testConfigPath = "/tmp/test-config-idempotent.json"
+    const rawConfig: Record<string, unknown> = {
+      agents: {
+        oracle: { model: "openai/gpt-5.2" },
+      },
+    }
+
+    fs.writeFileSync(testConfigPath, JSON.stringify(rawConfig, null, 2))
+    cleanupPaths.push(testConfigPath)
+
+    // #when: Run migration first time
+    const firstRun = migrateConfigFile(testConfigPath, rawConfig)
+    expect(firstRun).toBe(true)
+
+    // Load the migrated config
+    const migratedContent = fs.readFileSync(testConfigPath, "utf-8")
+    const migratedConfig = JSON.parse(migratedContent)
+
+    // #when: Run migration second time with migrated config
+    const secondRun = migrateConfigFile(testConfigPath, migratedConfig)
+
+    // #then: Second run should detect no changes needed
+    expect(secondRun).toBe(false)
+    expect(migratedConfig._schemaVersion).toBe(1)
+
+    const dir = path.dirname(testConfigPath)
+    const basename = path.basename(testConfigPath)
+    const files = fs.readdirSync(dir)
+    const backupFiles = files.filter((f) => f.startsWith(`${basename}.bak.`))
+    backupFiles.forEach((f) => cleanupPaths.push(path.join(dir, f)))
+  })
+})
+
 describe("migrateConfigFile with backup", () => {
   const cleanupPaths: string[] = []
 
@@ -492,7 +641,7 @@ describe("migrateConfigFile with backup", () => {
     expect(backupContent).toBe(testConfigContent)
   })
 
-  test("deletes agent config when all fields match category defaults", () => {
+  test("preserves agent config even when all fields match category defaults", () => {
     // #given: Config with agent matching category defaults
     const testConfigPath = "/tmp/test-config-delete.json"
     const rawConfig: Record<string, unknown> = {
@@ -510,11 +659,14 @@ describe("migrateConfigFile with backup", () => {
     // #when: Migrate config file
     const needsWrite = migrateConfigFile(testConfigPath, rawConfig)
 
-    // #then: Agent should be deleted (matches strategic category defaults)
+    // #then: Agent should be preserved with category (not deleted)
     expect(needsWrite).toBe(true)
 
     const migratedConfig = JSON.parse(fs.readFileSync(testConfigPath, "utf-8"))
-    expect(migratedConfig.agents).toEqual({})
+    expect(migratedConfig.agents.oracle).toEqual({
+      category: "ultrabrain",
+      temperature: 0.1,
+    })
 
     const dir = path.dirname(testConfigPath)
     const basename = path.basename(testConfigPath)
@@ -558,8 +710,8 @@ describe("migrateConfigFile with backup", () => {
     backupFiles.forEach((f) => cleanupPaths.push(path.join(dir, f)))
   })
 
-  test("does not write when no migration needed", () => {
-    // #given: Config with no migrations needed
+  test("writes schemaVersion when no other migration needed", () => {
+    // #given: Config with no migrations needed but missing _schemaVersion
     const testConfigPath = "/tmp/test-config-no-migration.json"
     const rawConfig: Record<string, unknown> = {
       agents: {
@@ -573,14 +725,15 @@ describe("migrateConfigFile with backup", () => {
     // #when: Migrate config file
     const needsWrite = migrateConfigFile(testConfigPath, rawConfig)
 
-    // #then: Should not write or create backup
-    expect(needsWrite).toBe(false)
+    // #then: Should write to add _schemaVersion
+    expect(needsWrite).toBe(true)
+    expect(rawConfig._schemaVersion).toBe(1)
 
     const dir = path.dirname(testConfigPath)
     const basename = path.basename(testConfigPath)
     const files = fs.readdirSync(dir)
     const backupFiles = files.filter((f) => f.startsWith(`${basename}.bak.`))
-    expect(backupFiles.length).toBe(0)
+    backupFiles.forEach((f) => cleanupPaths.push(path.join(dir, f)))
   })
 
   test("handles multiple agent migrations correctly", () => {
@@ -616,14 +769,17 @@ describe("migrateConfigFile with backup", () => {
     // #when: Migrate config file
     const needsWrite = migrateConfigFile(testConfigPath, rawConfig)
 
-    // #then: Should migrate correctly
+    // #then: Should migrate all agents to category format
     expect(needsWrite).toBe(true)
 
     const migratedConfig = JSON.parse(fs.readFileSync(testConfigPath, "utf-8"))
     const agents = migratedConfig.agents as Record<string, unknown>
 
-    expect(agents.oracle).toBeUndefined()
-    expect(agents.librarian).toBeUndefined()
+    expect(agents.oracle).toBeDefined()
+    expect((agents.oracle as Record<string, unknown>).category).toBe("ultrabrain")
+
+    expect(agents.librarian).toBeDefined()
+    expect((agents.librarian as Record<string, unknown>).category).toBe("general")
 
     expect(agents.frontend).toBeDefined()
     expect((agents.frontend as Record<string, unknown>).category).toBe("visual-engineering")

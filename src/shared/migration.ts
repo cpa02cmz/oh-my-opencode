@@ -106,7 +106,13 @@ export function shouldDeleteAgentConfig(
   return true
 }
 
+const CURRENT_SCHEMA_VERSION = 1
+
 export function migrateConfigFile(configPath: string, rawConfig: Record<string, unknown>): boolean {
+  if (rawConfig._schemaVersion === CURRENT_SCHEMA_VERSION) {
+    return false
+  }
+
   let needsWrite = false
 
   if (rawConfig.agents && typeof rawConfig.agents === "object") {
@@ -122,12 +128,7 @@ export function migrateConfigFile(configPath: string, rawConfig: Record<string, 
     for (const [name, config] of Object.entries(agents)) {
       const { migrated, changed } = migrateAgentConfigToCategory(config)
       if (changed) {
-        const category = migrated.category as string
-        if (shouldDeleteAgentConfig(migrated, category)) {
-          delete agents[name]
-        } else {
-          agents[name] = migrated
-        }
+        agents[name] = migrated
         needsWrite = true
       }
     }
@@ -145,6 +146,11 @@ export function migrateConfigFile(configPath: string, rawConfig: Record<string, 
       rawConfig.disabled_hooks = migrated
       needsWrite = true
     }
+  }
+
+  if (needsWrite || rawConfig._schemaVersion !== CURRENT_SCHEMA_VERSION) {
+    rawConfig._schemaVersion = CURRENT_SCHEMA_VERSION
+    needsWrite = true
   }
 
   if (needsWrite) {
