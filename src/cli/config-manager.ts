@@ -6,7 +6,7 @@ import {
   type OpenCodeConfigPaths,
 } from "../shared"
 import type { ConfigMergeResult, DetectedConfig, InstallConfig } from "./types"
-import { generateModelConfig } from "./model-fallback"
+import { generateCategoryConfig } from "./category-defaults"
 
 const OPENCODE_BINARIES = ["opencode", "opencode-desktop"] as const
 
@@ -307,8 +307,26 @@ function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial
   return result
 }
 
-export function generateOmoConfig(installConfig: InstallConfig): Record<string, unknown> {
-  return generateModelConfig(installConfig)
+export function generateOmoConfig(config: InstallConfig): Record<string, unknown> {
+  const categories = generateCategoryConfig({
+    hasClaude: config.hasClaude,
+    hasClaudeMax: config.isMax20,
+    hasChatGPT: config.hasOpenAI,
+    hasGemini: config.hasGemini,
+    hasCopilot: config.hasCopilot,
+  })
+
+  // Filter out fallback models (opencode/ prefix) when user doesn't have opencode zen
+  const filteredCategories = config.hasOpencodeZen
+    ? categories
+    : Object.fromEntries(
+        Object.entries(categories).filter(([, { model }]) => !model.startsWith("opencode/"))
+      )
+
+  return {
+    $schema: "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
+    categories: filteredCategories,
+  }
 }
 
 export function writeOmoConfig(installConfig: InstallConfig): ConfigMergeResult {
@@ -560,7 +578,7 @@ export function addProviderConfig(config: InstallConfig): ConfigMergeResult {
 
     const providers = (newConfig.provider ?? {}) as Record<string, unknown>
 
-    if (config.hasGemini) {
+    if (config.hasGemini && !providers.google) {
       providers.google = ANTIGRAVITY_PROVIDER_CONFIG.google
     }
 

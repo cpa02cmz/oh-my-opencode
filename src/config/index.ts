@@ -6,6 +6,7 @@ export {
   AgentNameSchema,
   HookNameSchema,
   BuiltinCommandNameSchema,
+  BuiltinCategoryNameSchema,
   SisyphusAgentConfigSchema,
   ExperimentalConfigSchema,
   RalphLoopConfigSchema,

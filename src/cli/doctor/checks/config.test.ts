@@ -1,8 +1,15 @@
 import { describe, it, expect, spyOn, afterEach } from "bun:test"
 import * as config from "./config"
+import * as fs from "node:fs"
 
 describe("config check", () => {
   describe("validateConfig", () => {
+    let readFileSpy: ReturnType<typeof spyOn>
+
+    afterEach(() => {
+      readFileSpy?.mockRestore()
+    })
+
     it("returns valid: false for non-existent file", () => {
       // #given non-existent file path
       // #when validating
@@ -11,6 +18,46 @@ describe("config check", () => {
       // #then should indicate invalid
       expect(result.valid).toBe(false)
       expect(result.errors.length).toBeGreaterThan(0)
+    })
+
+    it("detects deprecated model field", () => {
+      // #given config with deprecated model field on agent
+      const configContent = JSON.stringify({
+        agents: {
+          oracle: {
+            model: "anthropic/claude-sonnet-4-5",
+          },
+        },
+      })
+      readFileSpy = spyOn(fs, "readFileSync").mockReturnValue(configContent)
+
+      // #when validating
+      const result = config.validateConfig("/test/config.json")
+
+      // #then should fail with deprecated warning
+      expect(result.valid).toBe(false)
+      expect(result.errors.length).toBeGreaterThan(0)
+      expect(result.errors.some((e) => e.toLowerCase().includes("deprecated"))).toBe(true)
+    })
+
+    it("detects invalid category", () => {
+      // #given config with invalid category name
+      const configContent = JSON.stringify({
+        agents: {
+          oracle: {
+            category: "invalid-nonexistent-category",
+          },
+        },
+      })
+      readFileSpy = spyOn(fs, "readFileSync").mockReturnValue(configContent)
+
+      // #when validating
+      const result = config.validateConfig("/test/config.json")
+
+      // #then should fail with invalid category error
+      expect(result.valid).toBe(false)
+      expect(result.errors.length).toBeGreaterThan(0)
+      expect(result.errors.some((e) => e.toLowerCase().includes("invalid category"))).toBe(true)
     })
   })
 

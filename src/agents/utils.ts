@@ -61,7 +61,8 @@ export function buildAgent(
     const categoryConfig = categoryConfigs[agentWithCategory.category]
     if (categoryConfig) {
       if (!base.model) {
-        base.model = categoryConfig.model
+        // Category model takes precedence, fall back to systemDefaultModel if not defined
+        base.model = categoryConfig.model ?? model
       }
       if (base.temperature === undefined && categoryConfig.temperature !== undefined) {
         base.temperature = categoryConfig.temperature

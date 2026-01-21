@@ -78,7 +78,6 @@ function buildSisyphusJuniorPrompt(promptAppend?: string): string {
 const BLOCKED_TOOLS = ["task", "delegate_task"]
 
 export const SISYPHUS_JUNIOR_DEFAULTS = {
-  model: "anthropic/claude-sonnet-4-5",
   temperature: 0.1,
 } as const
 
@@ -90,7 +89,8 @@ export function createSisyphusJuniorAgentWithOverrides(
     override = undefined
   }
 
-  const model = override?.model ?? systemDefaultModel ?? SISYPHUS_JUNIOR_DEFAULTS.model
+  const model = override?.model ?? systemDefaultModel
+  if (!model) throw new Error("Invariant failed: Sisyphus-Junior model could not be resolved. This should have been caught by startup validation.")
   const temperature = override?.temperature ?? SISYPHUS_JUNIOR_DEFAULTS.temperature
 
   const promptAppend = override?.prompt_append

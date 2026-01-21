@@ -10,7 +10,7 @@ import {
   addProviderConfig,
   detectCurrentConfig,
 } from "./config-manager"
-import { shouldShowChatGPTOnlyWarning } from "./model-fallback"
+import { generateCategoryConfig, ALL_CATEGORIES, CATEGORY_PROVIDER_PRIORITY, CATEGORY_MODEL_DEFAULTS, type UserProviders } from "./category-defaults"
 import packageJson from "../../package.json" with { type: "json" }
 
 const VERSION = packageJson.version
@@ -25,6 +25,16 @@ const SYMBOLS = {
   star: color.yellow("★"),
 }
 
+const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  ultrabrain: "complex reasoning",
+  quick: "fast responses",
+  "visual-engineering": "UI/frontend",
+  "most-capable": "highest quality",
+  writing: "documentation",
+  general: "everyday tasks",
+  artistry: "creative design",
+}
+
 function formatProvider(name: string, enabled: boolean, detail?: string): string {
   const status = enabled ? SYMBOLS.check : color.dim("○")
   const label = enabled ? color.white(name) : color.dim(name)
@@ -32,7 +42,48 @@ function formatProvider(name: string, enabled: boolean, detail?: string): string
   return `  ${status} ${label}${suffix}`
 }
 
-function formatConfigSummary(config: InstallConfig): string {
+function installConfigToUserProviders(config: InstallConfig): UserProviders {
+  return {
+    hasClaude: config.hasClaude && !config.isMax20,
+    hasClaudeMax: config.hasClaude && config.isMax20,
+    hasChatGPT: config.hasOpenAI,
+    hasGemini: config.hasGemini,
+    hasCopilot: config.hasCopilot,
+  }
+}
+
+/**
+ * Checks if the user has one of the top-priority providers for a category.
+ * Returns the model if user has a high-priority provider, otherwise undefined.
+ * Categories without a high-priority provider will use OpenCode default.
+ * 
+ * "High-priority" means the first 2 providers in the priority list.
+ */
+function selectOptimalModelForCategory(category: string, providers: UserProviders): string | undefined {
+  const priority = CATEGORY_PROVIDER_PRIORITY[category]
+  const categoryDefaults = CATEGORY_MODEL_DEFAULTS[category]
+  if (!priority || !categoryDefaults || priority.length === 0) return undefined
+
+  const providerMap: Record<string, boolean> = {
+    claude_max: providers.hasClaudeMax,
+    claude: providers.hasClaude,
+    chatgpt: providers.hasChatGPT,
+    gemini: providers.hasGemini,
+    copilot: providers.hasCopilot,
+  }
+
+  // Only consider category "configured" if user has one of the top 2 priority providers
+  const topPriorities = priority.slice(0, 2)
+  for (const provider of topPriorities) {
+    if (providerMap[provider]) {
+      return categoryDefaults[provider]
+    }
+  }
+
+  return undefined // User doesn't have a high-priority provider
+}
+
+export function formatConfigSummary(config: InstallConfig): string {
   const lines: string[] = []
 
   lines.push(color.bold(color.white("Configuration Summary")))
@@ -52,8 +103,43 @@ function formatConfigSummary(config: InstallConfig): string {
 
   lines.push(color.bold(color.white("Model Assignment")))
   lines.push("")
-  lines.push(`  ${SYMBOLS.info} Models auto-configured based on provider priority`)
-  lines.push(`  ${SYMBOLS.bullet} Priority: Native > Copilot > OpenCode Zen > Z.ai`)
+
+  // Generate category configurations based on user's providers
+  const userProviders = installConfigToUserProviders(config)
+  const categories = generateCategoryConfig(userProviders)
+
+  // Build configured categories map (only with provider match, no fallback)
+  const configuredCategories: Record<string, string> = {}
+  for (const category of ALL_CATEGORIES) {
+    const model = selectOptimalModelForCategory(category, userProviders)
+    if (model) {
+      configuredCategories[category] = model
+    }
+  }
+
+  // Find unconfigured categories
+  const unconfiguredCategories = ALL_CATEGORIES.filter(cat => !(cat in configuredCategories))
+
+  // List configured categories
+  for (const [category, model] of Object.entries(configuredCategories)) {
+    const description = CATEGORY_DESCRIPTIONS[category] ?? ""
+    const descSuffix = description ? ` (${description})` : ""
+    lines.push(`  ${category} → ${model}${descSuffix}`)
+  }
+
+  // Warn about unconfigured categories
+  if (unconfiguredCategories.length > 0) {
+    lines.push("")
+    lines.push(`  ${SYMBOLS.warn} The following categories will use your OpenCode default model:`)
+    for (const category of unconfiguredCategories) {
+      const description = CATEGORY_DESCRIPTIONS[category] ?? ""
+      const descSuffix = description ? ` (${description})` : ""
+      lines.push(`    ${SYMBOLS.bullet} ${category}${descSuffix}`)
+    }
+  }
+
+  lines.push("")
+  lines.push(`  ${SYMBOLS.info} Run opencode models to see all available models.`)
 
   return lines.join("\n")
 }
@@ -172,15 +258,15 @@ function detectedToInitialValues(detected: DetectedConfig): { claude: ClaudeSubs
   }
 }
 
-async function runTuiMode(detected: DetectedConfig): Promise<InstallConfig | null> {
+export async function runTuiMode(detected: DetectedConfig): Promise<InstallConfig | null> {
   const initial = detectedToInitialValues(detected)
 
   const claude = await p.select({
-    message: "Do you have a Claude Pro/Max subscription?",
+    message: "Do you have a Claude subscription?",
     options: [
-      { value: "no" as const, label: "No", hint: "Will use opencode/glm-4.7-free as fallback" },
-      { value: "yes" as const, label: "Yes (standard)", hint: "Claude Opus 4.5 for orchestration" },
-      { value: "max20" as const, label: "Yes (max20 mode)", hint: "Full power with Claude Sonnet 4.5 for Librarian" },
+      { value: "no" as const, label: "No", hint: "Categories will use other providers or your default model" },
+      { value: "yes" as const, label: "Yes (Pro)", hint: "Enables Sonnet and Haiku for balanced performance" },
+      { value: "max20" as const, label: "Yes (Max)", hint: "Enables Opus for maximum reasoning capability" },
     ],
     initialValue: initial.claude,
   })
@@ -191,10 +277,10 @@ async function runTuiMode(detected: DetectedConfig): Promise<InstallConfig | nul
   }
 
   const openai = await p.select({
-    message: "Do you have an OpenAI/ChatGPT Plus subscription?",
+    message: "Do you have a ChatGPT subscription?",
     options: [
-      { value: "no" as const, label: "No", hint: "Oracle will use fallback models" },
-      { value: "yes" as const, label: "Yes", hint: "GPT-5.2 for Oracle (high-IQ debugging)" },
+      { value: "no" as const, label: "No" },
+      { value: "yes" as const, label: "Yes", hint: "Enables GPT models for complex reasoning tasks" },
     ],
     initialValue: initial.openai,
   })
@@ -205,10 +291,10 @@ async function runTuiMode(detected: DetectedConfig): Promise<InstallConfig | nul
   }
 
   const gemini = await p.select({
-    message: "Will you integrate Google Gemini?",
+    message: "Do you have a Google Gemini subscription?",
     options: [
-      { value: "no" as const, label: "No", hint: "Frontend/docs agents will use fallback" },
-      { value: "yes" as const, label: "Yes", hint: "Beautiful UI generation with Gemini 3 Pro" },
+      { value: "no" as const, label: "No" },
+      { value: "yes" as const, label: "Yes", hint: "Enables Gemini models for visual and creative work" },
     ],
     initialValue: initial.gemini,
   })
@@ -221,8 +307,8 @@ async function runTuiMode(detected: DetectedConfig): Promise<InstallConfig | nul
   const copilot = await p.select({
     message: "Do you have a GitHub Copilot subscription?",
     options: [
-      { value: "no" as const, label: "No", hint: "Only native providers will be used" },
-      { value: "yes" as const, label: "Yes", hint: "Fallback option when native providers unavailable" },
+      { value: "no" as const, label: "No" },
+      { value: "yes" as const, label: "Yes", hint: "Enables Copilot-proxied models as additional options" },
     ],
     initialValue: initial.copilot,
   })
@@ -233,10 +319,10 @@ async function runTuiMode(detected: DetectedConfig): Promise<InstallConfig | nul
   }
 
   const opencodeZen = await p.select({
-    message: "Do you have access to OpenCode Zen (opencode/ models)?",
+    message: "Do you have a OpenCode Zen subscription?",
     options: [
-      { value: "no" as const, label: "No", hint: "Will use other configured providers" },
-      { value: "yes" as const, label: "Yes", hint: "opencode/claude-opus-4-5, opencode/gpt-5.2, etc." },
+      { value: "no" as const, label: "No" },
+      { value: "yes" as const, label: "Yes", hint: "Enables OpenCode-proxied models for all providers" },
     ],
     initialValue: initial.opencodeZen,
   })
@@ -249,8 +335,8 @@ async function runTuiMode(detected: DetectedConfig): Promise<InstallConfig | nul
   const zaiCodingPlan = await p.select({
     message: "Do you have a Z.ai Coding Plan subscription?",
     options: [
-      { value: "no" as const, label: "No", hint: "Will use other configured providers" },
-      { value: "yes" as const, label: "Yes", hint: "zai-coding-plan/glm-4.7 for Librarian" },
+      { value: "no" as const, label: "No" },
+      { value: "yes" as const, label: "Yes", hint: "Enables Z.ai models for research and documentation" },
     ],
     initialValue: initial.zaiCodingPlan,
   })

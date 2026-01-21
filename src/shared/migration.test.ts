@@ -401,12 +401,12 @@ describe("shouldDeleteAgentConfig", () => {
   test("returns true when all fields match category defaults", () => {
     // #given: Config with fields matching category defaults
     const config = {
-      category: "visual-engineering",
-      model: "google/gemini-3-pro-preview",
+      category: "ultrabrain",
+      variant: "xhigh",
     }
 
     // #when: Check if config should be deleted
-    const shouldDelete = shouldDeleteAgentConfig(config, "visual-engineering")
+    const shouldDelete = shouldDeleteAgentConfig(config, "ultrabrain")
 
     // #then: Should return true (all fields match defaults)
     expect(shouldDelete).toBe(true)

@@ -1,6 +1,7 @@
-import { describe, expect, test, mock, beforeEach, afterEach } from "bun:test"
+import { describe, expect, test, mock, beforeEach, afterEach, spyOn } from "bun:test"
+import * as fs from "node:fs"
 
-import { ANTIGRAVITY_PROVIDER_CONFIG, getPluginNameWithVersion, fetchNpmDistTags, generateOmoConfig } from "./config-manager"
+import { ANTIGRAVITY_PROVIDER_CONFIG, getPluginNameWithVersion, fetchNpmDistTags, generateOmoConfig, addProviderConfig, initConfigContext, resetConfigContext } from "./config-manager"
 import type { InstallConfig } from "./types"
 
 describe("getPluginNameWithVersion", () => {
@@ -200,29 +201,8 @@ describe("config-manager ANTIGRAVITY_PROVIDER_CONFIG", () => {
   })
 })
 
-describe("generateOmoConfig - model fallback system", () => {
-  test("generates native sonnet models when Claude standard subscription", () => {
-    // #given user has Claude standard subscription (not max20)
-    const config: InstallConfig = {
-      hasClaude: true,
-      isMax20: false,
-      hasOpenAI: false,
-      hasGemini: false,
-      hasCopilot: false,
-      hasOpencodeZen: false,
-      hasZaiCodingPlan: false,
-    }
-
-    // #when generating config
-    const result = generateOmoConfig(config)
-
-    // #then should use native anthropic sonnet (cost-efficient for standard plan)
-    expect(result.$schema).toBe("https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json")
-    expect(result.agents).toBeDefined()
-    expect((result.agents as Record<string, { model: string }>).Sisyphus.model).toBe("anthropic/claude-sonnet-4-5")
-  })
-
-  test("generates native opus models when Claude max20 subscription", () => {
+describe("generateOmoConfig - category generation", () => {
+  test("generates category config based on providers (Claude Max)", () => {
     // #given user has Claude max20 subscription
     const config: InstallConfig = {
       hasClaude: true,
@@ -237,71 +217,14 @@ describe("generateOmoConfig - model fallback system", () => {
     // #when generating config
     const result = generateOmoConfig(config)
 
-    // #then should use native anthropic opus (max power for max20 plan)
-    expect((result.agents as Record<string, { model: string }>).Sisyphus.model).toBe("anthropic/claude-opus-4-5")
+    // #then should generate category-based config (not agent-based)
+    expect(result.categories).toBeDefined()
+    expect((result.categories as Record<string, { model: string }>)["most-capable"].model).toBe("anthropic/claude-opus-4-5")
+    expect((result.categories as Record<string, { model: string }>)["quick"].model).toBe("anthropic/claude-haiku-4-5")
+    expect(result.agents).toBeUndefined()
   })
 
-  test("uses github-copilot sonnet fallback when only copilot available", () => {
-    // #given user has only copilot (no max plan)
-    const config: InstallConfig = {
-      hasClaude: false,
-      isMax20: false,
-      hasOpenAI: false,
-      hasGemini: false,
-      hasCopilot: true,
-      hasOpencodeZen: false,
-      hasZaiCodingPlan: false,
-    }
-
-    // #when generating config
-    const result = generateOmoConfig(config)
-
-    // #then should use github-copilot sonnet models
-    expect((result.agents as Record<string, { model: string }>).Sisyphus.model).toBe("github-copilot/claude-sonnet-4.5")
-  })
-
-  test("uses ultimate fallback when no providers configured", () => {
-    // #given user has no providers
-    const config: InstallConfig = {
-      hasClaude: false,
-      isMax20: false,
-      hasOpenAI: false,
-      hasGemini: false,
-      hasCopilot: false,
-      hasOpencodeZen: false,
-      hasZaiCodingPlan: false,
-    }
-
-    // #when generating config
-    const result = generateOmoConfig(config)
-
-    // #then should use ultimate fallback for all agents
-    expect(result.$schema).toBe("https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json")
-    expect((result.agents as Record<string, { model: string }>).Sisyphus.model).toBe("opencode/glm-4.7-free")
-  })
-
-  test("uses zai-coding-plan/glm-4.7 for librarian when Z.ai available", () => {
-    // #given user has Z.ai and Claude max20
-    const config: InstallConfig = {
-      hasClaude: true,
-      isMax20: true,
-      hasOpenAI: false,
-      hasGemini: false,
-      hasCopilot: false,
-      hasOpencodeZen: false,
-      hasZaiCodingPlan: true,
-    }
-
-    // #when generating config
-    const result = generateOmoConfig(config)
-
-    // #then librarian should use zai-coding-plan/glm-4.7
-    expect((result.agents as Record<string, { model: string }>).librarian.model).toBe("zai-coding-plan/glm-4.7")
-    // #then other agents should use native opus (max20 plan)
-    expect((result.agents as Record<string, { model: string }>).Sisyphus.model).toBe("anthropic/claude-opus-4-5")
-  })
-
-  test("uses native OpenAI models when only ChatGPT available", () => {
+  test("generates category config based on providers (ChatGPT)", () => {
     // #given user has only ChatGPT subscription
     const config: InstallConfig = {
       hasClaude: false,
@@ -316,37 +239,14 @@ describe("generateOmoConfig - model fallback system", () => {
     // #when generating config
     const result = generateOmoConfig(config)
 
-    // #then Sisyphus should use native OpenAI (fallback within native tier)
-    expect((result.agents as Record<string, { model: string }>).Sisyphus.model).toBe("openai/gpt-5.2")
-    // #then Oracle should use native OpenAI (primary for ultrabrain)
-    expect((result.agents as Record<string, { model: string }>).oracle.model).toBe("openai/gpt-5.2-codex")
-    // #then multimodal-looker should use native OpenAI (fallback within native tier)
-    expect((result.agents as Record<string, { model: string }>)["multimodal-looker"].model).toBe("openai/gpt-5.2")
+    // #then should generate ultrabrain category with OpenAI model
+    expect((result.categories as Record<string, { model: string }>)["ultrabrain"].model).toBe("openai/gpt-5.2")
   })
 
-  test("uses haiku for explore when Claude max20", () => {
-    // #given user has Claude max20
+  test("generates empty categories when no providers", () => {
+    // #given user has no providers
     const config: InstallConfig = {
-      hasClaude: true,
-      isMax20: true,
-      hasOpenAI: false,
-      hasGemini: false,
-      hasCopilot: false,
-      hasOpencodeZen: false,
-      hasZaiCodingPlan: false,
-    }
-
-    // #when generating config
-    const result = generateOmoConfig(config)
-
-    // #then explore should use haiku (max20 plan uses Claude quota)
-    expect((result.agents as Record<string, { model: string }>).explore.model).toBe("anthropic/claude-haiku-4-5")
-  })
-
-  test("uses grok-code for explore when not max20", () => {
-    // #given user has Claude but not max20
-    const config: InstallConfig = {
-      hasClaude: true,
+      hasClaude: false,
       isMax20: false,
       hasOpenAI: false,
       hasGemini: false,
@@ -358,7 +258,118 @@ describe("generateOmoConfig - model fallback system", () => {
     // #when generating config
     const result = generateOmoConfig(config)
 
-    // #then explore should use grok-code (preserve Claude quota)
-    expect((result.agents as Record<string, { model: string }>).explore.model).toBe("opencode/grok-code")
+    // #then should have categories defined (empty or undefined based on implementation)
+    expect(result.categories).toBeDefined()
+    expect(Object.keys(result.categories as Record<string, unknown>).length).toBe(0)
+    expect(result.agents).toBeUndefined()
+  })
+})
+
+describe("addProviderConfig", () => {
+  let existsSyncSpy: ReturnType<typeof spyOn>
+  let readFileSyncSpy: ReturnType<typeof spyOn>
+  let writeFileSyncSpy: ReturnType<typeof spyOn>
+  let statSyncSpy: ReturnType<typeof spyOn>
+  let mkdirSyncSpy: ReturnType<typeof spyOn>
+
+  beforeEach(() => {
+    // Initialize config context with a test path
+    initConfigContext("opencode", "1.0.0")
+  })
+
+  afterEach(() => {
+    existsSyncSpy?.mockRestore()
+    readFileSyncSpy?.mockRestore()
+    writeFileSyncSpy?.mockRestore()
+    statSyncSpy?.mockRestore()
+    mkdirSyncSpy?.mockRestore()
+    resetConfigContext()
+  })
+
+  test("should preserve existing google provider config", () => {
+    // #given a config with existing google provider
+    const existingConfig = {
+      provider: {
+        google: {
+          existing: true,
+          customModel: "my-custom-model",
+        },
+      },
+    }
+
+    existsSyncSpy = spyOn(fs, "existsSync").mockReturnValue(true)
+    mkdirSyncSpy = spyOn(fs, "mkdirSync").mockReturnValue(undefined)
+    statSyncSpy = spyOn(fs, "statSync").mockReturnValue({ size: 100 } as fs.Stats)
+    readFileSyncSpy = spyOn(fs, "readFileSync").mockReturnValue(JSON.stringify(existingConfig))
+    writeFileSyncSpy = spyOn(fs, "writeFileSync").mockReturnValue(undefined)
+
+    // #when adding provider config with hasGemini: true
+    const installConfig: InstallConfig = {
+      hasClaude: false,
+      isMax20: false,
+      hasOpenAI: false,
+      hasGemini: true,
+      hasCopilot: false,
+      hasOpencodeZen: false,
+      hasZaiCodingPlan: false,
+    }
+
+    const result = addProviderConfig(installConfig)
+
+    // #then writeFileSync should be called with config that preserves existing google config
+    expect(result.success).toBe(true)
+    expect(writeFileSyncSpy).toHaveBeenCalled()
+
+    const writtenContent = writeFileSyncSpy.mock.calls[0]?.[1] as string
+    const writtenConfig = JSON.parse(writtenContent)
+
+    // Existing google config should be preserved, not overwritten
+    expect(writtenConfig.provider.google.existing).toBe(true)
+    expect(writtenConfig.provider.google.customModel).toBe("my-custom-model")
+
+    // ANTIGRAVITY_PROVIDER_CONFIG.google should NOT have been merged
+    // (the existing config should take precedence)
+    expect(writtenConfig.provider.google.models).toBeUndefined()
+  })
+
+  test("should add google provider if missing", () => {
+    // #given a config without google provider
+    const existingConfig = {
+      provider: {
+        openai: { apiKey: "sk-xxx" },
+      },
+    }
+
+    existsSyncSpy = spyOn(fs, "existsSync").mockReturnValue(true)
+    mkdirSyncSpy = spyOn(fs, "mkdirSync").mockReturnValue(undefined)
+    statSyncSpy = spyOn(fs, "statSync").mockReturnValue({ size: 100 } as fs.Stats)
+    readFileSyncSpy = spyOn(fs, "readFileSync").mockReturnValue(JSON.stringify(existingConfig))
+    writeFileSyncSpy = spyOn(fs, "writeFileSync").mockReturnValue(undefined)
+
+    // #when adding provider config with hasGemini: true
+    const installConfig: InstallConfig = {
+      hasClaude: false,
+      isMax20: false,
+      hasOpenAI: false,
+      hasGemini: true,
+      hasCopilot: false,
+      hasOpencodeZen: false,
+      hasZaiCodingPlan: false,
+    }
+
+    const result = addProviderConfig(installConfig)
+
+    // #then writeFileSync should be called with config that includes ANTIGRAVITY google provider
+    expect(result.success).toBe(true)
+    expect(writeFileSyncSpy).toHaveBeenCalled()
+
+    const writtenContent = writeFileSyncSpy.mock.calls[0]?.[1] as string
+    const writtenConfig = JSON.parse(writtenContent)
+
+    // Google provider should be added from ANTIGRAVITY_PROVIDER_CONFIG
+    expect(writtenConfig.provider.google).toEqual(ANTIGRAVITY_PROVIDER_CONFIG.google)
+
+    // Existing openai provider should be preserved
+    expect(writtenConfig.provider.openai.apiKey).toBe("sk-xxx")
   })
 })

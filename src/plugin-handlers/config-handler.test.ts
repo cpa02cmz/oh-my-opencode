@@ -12,7 +12,7 @@ describe("Prometheus category config resolution", () => {
 
     // #then
     expect(config).toBeDefined()
-    expect(config?.model).toBe("openai/gpt-5.2-codex")
+    expect(config?.model).toBeUndefined()
     expect(config?.variant).toBe("xhigh")
   })
 
@@ -25,7 +25,7 @@ describe("Prometheus category config resolution", () => {
 
     // #then
     expect(config).toBeDefined()
-    expect(config?.model).toBe("google/gemini-3-pro-preview")
+    expect(config?.model).toBeUndefined()
   })
 
   test("user categories override default categories", () => {
@@ -72,7 +72,7 @@ describe("Prometheus category config resolution", () => {
 
     // #then - falls back to DEFAULT_CATEGORIES
     expect(config).toBeDefined()
-    expect(config?.model).toBe("openai/gpt-5.2-codex")
+    expect(config?.model).toBeUndefined()
     expect(config?.variant).toBe("xhigh")
   })
 

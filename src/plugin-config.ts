@@ -1,6 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { OhMyOpenCodeConfigSchema, type OhMyOpenCodeConfig } from "./config";
+import {
+  OhMyOpenCodeConfigSchema,
+  type OhMyOpenCodeConfig,
+} from "./config";
+import { validateConfig } from "./config/validator";
 import {
   log,
   deepMerge,
@@ -36,6 +40,7 @@ export function loadConfigFromPath(
         return null;
       }
 
+      validateConfig(result.data);
       log(`Config loaded from ${configPath}`, { agents: result.data.agents });
       return result.data;
     }

@@ -36,13 +36,13 @@ When both `oh-my-opencode.jsonc` and `oh-my-opencode.json` files exist, `.jsonc`
 {
   "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
 
-  /* Agent overrides - customize models for specific tasks */
+  /* Agent overrides - assign agents to categories for model selection */
   "agents": {
     "oracle": {
-      "model": "openai/gpt-5.2"  // GPT for strategic reasoning
+      "category": "ultrabrain"  // Deep reasoning category
     },
     "explore": {
-      "model": "opencode/grok-code"  // Free & fast for exploration
+      "category": "quick"  // Fast exploration category
     },
   },
 }
@@ -60,7 +60,7 @@ Override built-in agent settings:
 {
   "agents": {
     "explore": {
-      "model": "anthropic/claude-haiku-4-5",
+      "category": "quick",
       "temperature": 0.5
     },
     "multimodal-looker": {
@@ -70,7 +70,7 @@ Override built-in agent settings:
 }
 ```
 
-Each agent supports: `model`, `temperature`, `top_p`, `prompt`, `prompt_append`, `tools`, `disable`, `description`, `mode`, `color`, `permission`.
+Each agent supports: `category`, `temperature`, `top_p`, `prompt`, `prompt_append`, `tools`, `disable`, `description`, `mode`, `color`, `permission`.
 
 Use `prompt_append` to add extra instructions without replacing the default system prompt:
 
@@ -201,23 +201,29 @@ This enables OpenCode-Builder agent alongside Sisyphus. The default build agent 
 }
 ```
 
-You can also customize Sisyphus agents like other agents:
+You can also customize Sisyphus agents like other agents. Instead of setting `model` directly, define custom categories and reference them:
 
 ```json
 {
+  "categories": {
+    "sisyphus-custom": { "model": "anthropic/claude-sonnet-4" },
+    "builder-custom": { "model": "anthropic/claude-opus-4" },
+    "planner-custom": { "model": "openai/gpt-5.2" },
+    "consultant-custom": { "model": "anthropic/claude-sonnet-4-5" }
+  },
   "agents": {
     "Sisyphus": {
-      "model": "anthropic/claude-sonnet-4",
+      "category": "sisyphus-custom",
       "temperature": 0.3
     },
     "OpenCode-Builder": {
-      "model": "anthropic/claude-opus-4"
+      "category": "builder-custom"
     },
     "Prometheus (Planner)": {
-      "model": "openai/gpt-5.2"
+      "category": "planner-custom"
     },
     "Metis (Plan Consultant)": {
-      "model": "anthropic/claude-sonnet-4-5"
+      "category": "consultant-custom"
     }
   }
 }
@@ -463,16 +469,18 @@ Categories follow the same fallback logic as agents:
 
 ### Subscription Scenarios
 
+The installer generates `categories` configuration based on your subscriptions. These categories are then referenced by agents automatically.
+
 #### Scenario 1: Claude Only (Standard Plan)
 
 ```json
 // User has: Claude Pro (not max20)
 {
-  "agents": {
-    "Sisyphus": { "model": "anthropic/claude-sonnet-4-5" },
-    "oracle": { "model": "anthropic/claude-opus-4-5" },
-    "explore": { "model": "opencode/grok-code" },
-    "librarian": { "model": "opencode/glm-4.7-free" }
+  "categories": {
+    "most-capable": { "model": "anthropic/claude-sonnet-4-5" },
+    "ultrabrain": { "model": "anthropic/claude-opus-4-5" },
+    "quick": { "model": "opencode/grok-code" },
+    "writing": { "model": "opencode/glm-4.7-free" }
   }
 }
 ```
@@ -482,11 +490,11 @@ Categories follow the same fallback logic as agents:
 ```json
 // User has: Claude Max (max20 mode)
 {
-  "agents": {
-    "Sisyphus": { "model": "anthropic/claude-opus-4-5" },
-    "oracle": { "model": "anthropic/claude-opus-4-5" },
-    "explore": { "model": "anthropic/claude-haiku-4-5" },
-    "librarian": { "model": "opencode/glm-4.7-free" }
+  "categories": {
+    "most-capable": { "model": "anthropic/claude-opus-4-5" },
+    "ultrabrain": { "model": "anthropic/claude-opus-4-5" },
+    "quick": { "model": "anthropic/claude-haiku-4-5" },
+    "writing": { "model": "opencode/glm-4.7-free" }
   }
 }
 ```
@@ -496,12 +504,12 @@ Categories follow the same fallback logic as agents:
 ```json
 // User has: OpenAI/ChatGPT Plus only
 {
-  "agents": {
-    "Sisyphus": { "model": "openai/gpt-5.2" },
-    "oracle": { "model": "openai/gpt-5.2-codex" },
-    "explore": { "model": "opencode/grok-code" },
-    "multimodal-looker": { "model": "openai/gpt-5.2" },
-    "librarian": { "model": "opencode/glm-4.7-free" }
+  "categories": {
+    "most-capable": { "model": "openai/gpt-5.2" },
+    "ultrabrain": { "model": "openai/gpt-5.2-codex" },
+    "quick": { "model": "opencode/grok-code" },
+    "visual": { "model": "openai/gpt-5.2" },
+    "writing": { "model": "opencode/glm-4.7-free" }
   }
 }
 ```
@@ -511,12 +519,12 @@ Categories follow the same fallback logic as agents:
 ```json
 // User has: All native providers
 {
-  "agents": {
-    "Sisyphus": { "model": "anthropic/claude-opus-4-5" },
-    "oracle": { "model": "openai/gpt-5.2-codex" },
-    "explore": { "model": "anthropic/claude-haiku-4-5" },
-    "multimodal-looker": { "model": "google/gemini-3-pro-preview" },
-    "librarian": { "model": "opencode/glm-4.7-free" }
+  "categories": {
+    "most-capable": { "model": "anthropic/claude-opus-4-5" },
+    "ultrabrain": { "model": "openai/gpt-5.2-codex" },
+    "quick": { "model": "anthropic/claude-haiku-4-5" },
+    "visual": { "model": "google/gemini-3-pro-preview" },
+    "writing": { "model": "opencode/glm-4.7-free" }
   }
 }
 ```
@@ -526,11 +534,11 @@ Categories follow the same fallback logic as agents:
 ```json
 // User has: GitHub Copilot only (no native providers)
 {
-  "agents": {
-    "Sisyphus": { "model": "github-copilot/claude-sonnet-4.5" },
-    "oracle": { "model": "github-copilot/gpt-5.2-codex" },
-    "explore": { "model": "opencode/grok-code" },
-    "librarian": { "model": "github-copilot/gpt-5.2" }
+  "categories": {
+    "most-capable": { "model": "github-copilot/claude-sonnet-4.5" },
+    "ultrabrain": { "model": "github-copilot/gpt-5.2-codex" },
+    "quick": { "model": "opencode/grok-code" },
+    "writing": { "model": "github-copilot/gpt-5.2" }
   }
 }
 ```
@@ -550,21 +558,21 @@ The `isMax20` flag (Claude Max 20x mode) affects high-tier task model selection:
 
 ### Manual Override
 
-You can always override automatic selection in `oh-my-opencode.json`:
+You can override automatic selection in `oh-my-opencode.json` by either redefining category models or pointing agents to different categories:
 
 ```json
 {
-  "agents": {
-    "Sisyphus": {
-      "model": "anthropic/claude-sonnet-4-5"  // Force specific model
+  "categories": {
+    "most-capable": {
+      "model": "anthropic/claude-sonnet-4-5"  // Override category model
     },
-    "oracle": {
-      "model": "openai/o3"  // Use different model
+    "custom-oracle": {
+      "model": "openai/o3"  // Define a custom category
     }
   },
-  "categories": {
-    "visual-engineering": {
-      "model": "anthropic/claude-opus-4-5"  // Override category default
+  "agents": {
+    "oracle": {
+      "category": "custom-oracle"  // Point agent to custom category
     }
   }
 }

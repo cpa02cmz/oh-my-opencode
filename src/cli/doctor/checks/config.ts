@@ -5,6 +5,10 @@ import type { CheckResult, CheckDefinition, ConfigInfo } from "../types"
 import { CHECK_IDS, CHECK_NAMES, PACKAGE_NAME } from "../constants"
 import { parseJsonc, detectConfigFile } from "../../../shared"
 import { OhMyOpenCodeConfigSchema } from "../../../config"
+import {
+  validateConfig as validateConfigSemantics,
+  ConfigValidationError,
+} from "../../../config/validator"
 
 const USER_CONFIG_DIR = join(homedir(), ".config", "opencode")
 const USER_CONFIG_BASE = join(USER_CONFIG_DIR, `${PACKAGE_NAME}`)
@@ -28,13 +32,26 @@ export function validateConfig(configPath: string): { valid: boolean; errors: st
   try {
     const content = readFileSync(configPath, "utf-8")
     const rawConfig = parseJsonc<Record<string, unknown>>(content)
-    const result = OhMyOpenCodeConfigSchema.safeParse(rawConfig)
+    const schemaResult = OhMyOpenCodeConfigSchema.safeParse(rawConfig)
 
-    if (!result.success) {
-      const errors = result.error.issues.map(
+    // Guard: Zod schema validation failed
+    if (!schemaResult.success) {
+      const errors = schemaResult.error.issues.map(
         (i) => `${i.path.join(".")}: ${i.message}`
       )
       return { valid: false, errors }
+    }
+
+    // Run semantic validation (deprecated fields, invalid categories, etc.)
+    try {
+      validateConfigSemantics(schemaResult.data)
+    } catch (err) {
+      // Guard: semantic validation failed
+      if (err instanceof ConfigValidationError) {
+        const errors = err.errors.map((e) => `${e.path}: ${e.message}`)
+        return { valid: false, errors }
+      }
+      throw err
     }
 
     return { valid: true, errors: [] }

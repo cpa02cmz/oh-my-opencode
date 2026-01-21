@@ -122,8 +122,8 @@ describe("buildAgent with category and skills", () => {
     // #when
     const agent = buildAgent(source["test-agent"], TEST_MODEL)
 
-    // #then - category's built-in model is applied
-    expect(agent.model).toBe("google/gemini-3-pro-preview")
+    // #then - category's built-in model is applied (falls back to systemDefaultModel)
+    expect(agent.model).toBe(TEST_MODEL)
   })
 
   test("agent with category and existing model keeps existing model", () => {
@@ -244,8 +244,8 @@ describe("buildAgent with category and skills", () => {
     // #when
     const agent = buildAgent(source["test-agent"], TEST_MODEL)
 
-    // #then - category's built-in model and skills are applied
-    expect(agent.model).toBe("openai/gpt-5.2-codex")
+    // #then - category's built-in model and skills are applied (falls back to systemDefaultModel)
+    expect(agent.model).toBe(TEST_MODEL)
     expect(agent.variant).toBe("xhigh")
     expect(agent.prompt).toContain("Role: Designer-Turned-Developer")
     expect(agent.prompt).toContain("Task description")
