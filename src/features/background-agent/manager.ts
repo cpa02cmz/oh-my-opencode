@@ -72,6 +72,7 @@ export class BackgroundManager {
 
   private queuesByKey: Map<string, QueueItem[]> = new Map()
   private processingKeys: Set<string> = new Set()
+  private completionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
 
   constructor(ctx: PluginInput, config?: BackgroundTaskConfig) {
     this.tasks = new Map()
@@ -643,7 +644,11 @@ export class BackgroundManager {
          this.concurrencyManager.release(task.concurrencyKey)
          task.concurrencyKey = undefined
        }
-      // Clean up pendingByParent to prevent stale entries
+      const existingTimer = this.completionTimers.get(task.id)
+      if (existingTimer) {
+        clearTimeout(existingTimer)
+        this.completionTimers.delete(task.id)
+      }
       this.cleanupPendingByParent(task)
       this.tasks.delete(task.id)
       this.clearNotificationsForTask(task.id)
@@ -1008,14 +1013,15 @@ Use \`background_output(task_id="${task.id}")\` to retrieve this result when rea
     }
 
     const taskId = task.id
-    setTimeout(() => {
-      // Guard: Only delete if task still exists (could have been deleted by session.deleted event)
+    const timer = setTimeout(() => {
+      this.completionTimers.delete(taskId)
       if (this.tasks.has(taskId)) {
         this.clearNotificationsForTask(taskId)
         this.tasks.delete(taskId)
         log("[background-agent] Removed completed task from memory:", taskId)
       }
     }, 5 * 60 * 1000)
+    this.completionTimers.set(taskId, timer)
   }
 
   private formatDuration(start: Date, end?: Date): string {
@@ -1292,7 +1298,11 @@ Use \`background_output(task_id="${task.id}")\` to retrieve this result when rea
       }
     }
 
-    // Then clear all state (cancels any remaining waiters)
+    for (const timer of this.completionTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.completionTimers.clear()
+
     this.concurrencyManager.clear()
     this.tasks.clear()
     this.notifications.clear()
