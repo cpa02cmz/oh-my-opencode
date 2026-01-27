@@ -5,6 +5,10 @@ import { readJsonSafe, writeJsonAtomic } from "../../features/sisyphus-tasks/sto
 import { TaskSchema, type Task } from "../../features/sisyphus-tasks/types"
 import { formatTaskUpdate } from "../../features/sisyphus-tasks/formatters"
 
+type ToolContextWithMetadata = {
+  metadata?: (input: { title?: string; metadata?: Record<string, unknown> }) => void
+}
+
 export const taskUpdateTool: ToolDefinition = tool({
   description: "Update a task",
   args: {
@@ -18,7 +22,8 @@ export const taskUpdateTool: ToolDefinition = tool({
     metadata: tool.schema.string().optional().describe("JSON metadata object to merge"),
     task_dir: tool.schema.string().optional().describe("Task directory (defaults to current working directory)"),
   },
-  execute: async (args) => {
+  execute: async (args, context) => {
+    const ctx = context as ToolContextWithMetadata
     const taskDir = args.task_dir ?? process.cwd()
     const taskPath = join(taskDir, `${args.task_id}.json`)
     const task = readJsonSafe(taskPath, TaskSchema)

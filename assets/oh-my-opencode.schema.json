@@ -94,6 +94,12 @@
         ]
       }
     },
+    "disabled_tools": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "agents": {
       "type": "object",
       "properties": {

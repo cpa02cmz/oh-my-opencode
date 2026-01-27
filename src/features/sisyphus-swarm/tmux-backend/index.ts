@@ -79,9 +79,4 @@ function runCommand(command: string): boolean {
   return result.exitCode === 0
 }
 
-declare const Bun: {
-  spawnSync(
-    command: string[],
-    options: { stdout: "pipe"; stderr: "pipe" }
-  ): { exitCode: number }
-}
+

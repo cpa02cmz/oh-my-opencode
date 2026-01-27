@@ -35,7 +35,6 @@ import {
   createSisyphusJuniorNotepadHook,
   createQuestionLabelTruncatorHook,
   createSubagentQuestionBlockerHook,
-  createTasksTodowriteDisablerHook,
 } from "./hooks";
 import {
   contextCollector,
@@ -239,10 +238,6 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
   const questionLabelTruncator = createQuestionLabelTruncatorHook();
   const subagentQuestionBlocker = createSubagentQuestionBlockerHook();
 
-  const tasksTodowriteDisabler = isHookEnabled("tasks-todowrite-disabler")
-    ? createTasksTodowriteDisablerHook({ sisyphusConfig: pluginConfig.sisyphus })
-    : null;
-
   const taskResumeInfo = createTaskResumeInfoHook();
 
   const tmuxSessionManager = new TmuxSessionManager(ctx, tmuxConfig);
@@ -400,20 +395,39 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     teammate: teammateTool,
   } as Record<string, typeof teammateTool> : {}
 
+  const disabledToolsSet = new Set(pluginConfig.disabled_tools ?? [])
+  if (sisyphusTasksEnabled) {
+    disabledToolsSet.add("todowrite")
+    disabledToolsSet.add("todoread")
+  }
+
+  const filterTools = <T extends Record<string, unknown>>(tools: T): T => {
+    if (disabledToolsSet.size === 0) return tools
+    const filtered: Record<string, unknown> = {}
+    for (const [name, tool] of Object.entries(tools)) {
+      if (!disabledToolsSet.has(name)) {
+        filtered[name] = tool
+      }
+    }
+    return filtered as T
+  }
+
+  const allTools = {
+    ...builtinTools,
+    ...backgroundTools,
+    call_omo_agent: callOmoAgent,
+    ...(lookAt ? { look_at: lookAt } : {}),
+    delegate_task: delegateTask,
+    skill: skillTool,
+    skill_mcp: skillMcpTool,
+    slashcommand: slashcommandTool,
+    interactive_bash,
+    ...sisyphusTaskTools,
+    ...sisyphusSwarmTools,
+  }
+
   return {
-    tool: {
-      ...builtinTools,
-      ...backgroundTools,
-      call_omo_agent: callOmoAgent,
-      ...(lookAt ? { look_at: lookAt } : {}),
-      delegate_task: delegateTask,
-      skill: skillTool,
-      skill_mcp: skillMcpTool,
-      slashcommand: slashcommandTool,
-      interactive_bash,
-      ...sisyphusTaskTools,
-      ...sisyphusSwarmTools,
-    },
+    tool: filterTools(allTools),
 
     "chat.message": async (input, output) => {
       if (input.agent) {
@@ -606,7 +620,6 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await prometheusMdOnly?.["tool.execute.before"]?.(input, output);
       await sisyphusJuniorNotepad?.["tool.execute.before"]?.(input, output);
       await atlasHook?.["tool.execute.before"]?.(input, output);
-      await tasksTodowriteDisabler?.["tool.execute.before"]?.(input, output);
 
       if (input.tool === "task") {
         const args = output.args as Record<string, unknown>;

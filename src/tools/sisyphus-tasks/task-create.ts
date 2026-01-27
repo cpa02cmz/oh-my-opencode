@@ -5,6 +5,10 @@ import { writeJsonAtomic, ensureDir } from "../../features/sisyphus-tasks/storag
 import type { Task } from "../../features/sisyphus-tasks/types"
 import { formatTaskCreate } from "../../features/sisyphus-tasks/formatters"
 
+type ToolContextWithMetadata = {
+  metadata?: (input: { title?: string; metadata?: Record<string, unknown> }) => void
+}
+
 export const taskCreateTool: ToolDefinition = tool({
   description: "Create a new task",
   args: {
@@ -14,7 +18,8 @@ export const taskCreateTool: ToolDefinition = tool({
     metadata: tool.schema.string().optional().describe("JSON metadata object"),
     task_dir: tool.schema.string().optional().describe("Task directory (defaults to current working directory)"),
   },
-  execute: async (args) => {
+  execute: async (args, context) => {
+    const ctx = context as ToolContextWithMetadata
     const taskDir = args.task_dir ?? process.cwd()
     ensureDir(taskDir)
 
@@ -36,6 +41,11 @@ export const taskCreateTool: ToolDefinition = tool({
     }
 
     writeJsonAtomic(join(taskDir, `${nextId}.json`), task)
+
+    ctx.metadata?.({
+      title: `Task #${task.id} Created`,
+      metadata: { taskId: task.id, subject: task.subject, status: "pending" }
+    })
 
     return formatTaskCreate({ id: task.id, subject: task.subject })
   }
