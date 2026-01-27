@@ -881,7 +881,7 @@ To continue this session: session_id="${task.sessionID}"`
         }
 
         const blockers: string[] = []
-        for (const blockerId of executeTask.blockedBy) {
+        for (const blockerId of executeTask.dependsOn) {
           const blocker = readJsonSafe(join(executeTaskDir, `${blockerId}.json`), TaskSchema)
           if (blocker && blocker.status !== "completed") {
             blockers.push(blockerId)
@@ -893,20 +893,20 @@ To continue this session: session_id="${task.sessionID}"`
       }
 
       // Compose effective prompt and description
-      const effectiveDescription = args.description || (executeTask?.subject ?? "Task execution")
+      const effectiveDescription = args.description || (executeTask?.title ?? "Task execution")
       let effectivePrompt = args.prompt
 
       if (executeTask) {
         const taskPromptParts = [
-          `## Task: ${executeTask.subject}`,
+          `## Task: ${executeTask.title}`,
           "",
           "## Description",
           executeTask.description || "(none)",
           "",
-          "## Task Metadata",
-          `- Task ID: ${executeTask.id}`,
-          `- Status: in_progress`,
-          `- Blocked By: ${executeTask.blockedBy.length > 0 ? executeTask.blockedBy.join(", ") : "none"}`,
+           "## Task Metadata",
+           `- Task ID: ${executeTask.id}`,
+           `- Status: in_progress`,
+           `- Blocked By: ${executeTask.dependsOn.length > 0 ? executeTask.dependsOn.join(", ") : "none"}`,
         ]
 
         if (args.prompt) {
