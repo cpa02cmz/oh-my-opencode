@@ -30,6 +30,8 @@ export { readState, writeState, clearState, incrementIteration } from "./storage
 
 interface SessionState {
   isRecovering?: boolean
+  isHandlingIdle?: boolean
+  lastInjectionTime?: number
 }
 
 interface OpenCodeSessionMessage {
@@ -67,7 +69,8 @@ export interface RalphLoopHook {
   getState: () => RalphLoopState | null
 }
 
-const DEFAULT_API_TIMEOUT = 3000
+const DEFAULT_API_TIMEOUT = 5000
+const MIN_INTERVAL_BETWEEN_INJECTIONS_MS = 2000
 
 export function createRalphLoopHook(
   ctx: PluginInput,
@@ -136,25 +139,58 @@ export function createRalphLoopHook(
         ),
       ])
 
-      const messages = (response as { data?: unknown[] }).data ?? []
-      if (!Array.isArray(messages)) return false
+      const rawMessages = (response as { data?: unknown[]; "200"?: unknown[] }).data
+        ?? (response as { "200"?: unknown[] })["200"]
+        ?? (Array.isArray(response) ? response : [])
+      if (!Array.isArray(rawMessages)) return false
 
-      const assistantMessages = (messages as OpenCodeSessionMessage[]).filter(
+      const assistantMessages = (rawMessages as OpenCodeSessionMessage[]).filter(
         (msg) => msg.info?.role === "assistant"
       )
-      const lastAssistant = assistantMessages[assistantMessages.length - 1]
-      if (!lastAssistant?.parts) return false
+
+      if (assistantMessages.length === 0) return false
 
       const pattern = new RegExp(`<promise>\\s*${escapeRegex(promise)}\\s*</promise>`, "is")
-      const responseText = lastAssistant.parts
-        .filter((p) => p.type === "text")
-        .map((p) => p.text ?? "")
-        .join("\n")
+      const lastN = assistantMessages.slice(-3)
 
-      return pattern.test(responseText)
+      for (const msg of lastN) {
+        if (!msg.parts) continue
+        const responseText = msg.parts
+          .filter((p) => p.type === "text" || p.type === "reasoning")
+          .map((p) => p.text ?? "")
+          .join("\n")
+        if (pattern.test(responseText)) return true
+      }
+
+      return false
     } catch (err) {
       log(`[${HOOK_NAME}] Session messages check failed`, { sessionID, error: String(err) })
       return false
+    }
+  }
+
+  async function sessionHasAssistantOutput(sessionID: string): Promise<boolean> {
+    try {
+      const response = await Promise.race([
+        ctx.client.session.messages({
+          path: { id: sessionID },
+          query: { directory: ctx.directory },
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("API timeout")), apiTimeout)
+        ),
+      ])
+
+      const rawMessages = (response as { data?: unknown[]; "200"?: unknown[] }).data
+        ?? (response as { "200"?: unknown[] })["200"]
+        ?? (Array.isArray(response) ? response : [])
+      if (!Array.isArray(rawMessages)) return false
+
+      return (rawMessages as OpenCodeSessionMessage[]).some(
+        (msg) => msg.info?.role === "assistant" && msg.parts && msg.parts.length > 0
+      )
+    } catch {
+      return true
     }
   }
 
@@ -215,136 +251,157 @@ export function createRalphLoopHook(
       if (!sessionID) return
 
       const sessionState = getSessionState(sessionID)
+
+      if (sessionState.isHandlingIdle) {
+        log(`[${HOOK_NAME}] Skipped: already handling idle`, { sessionID })
+        return
+      }
+
       if (sessionState.isRecovering) {
         log(`[${HOOK_NAME}] Skipped: in recovery`, { sessionID })
         return
       }
 
-      const state = readState(ctx.directory, stateDir)
-      if (!state || !state.active) {
-        return
-      }
-
-      if (state.session_id && state.session_id !== sessionID) {
-        if (checkSessionExists) {
-          try {
-            const originalSessionExists = await checkSessionExists(state.session_id)
-            if (!originalSessionExists) {
-              clearState(ctx.directory, stateDir)
-              log(`[${HOOK_NAME}] Cleared orphaned state from deleted session`, {
-                orphanedSessionId: state.session_id,
-                currentSessionId: sessionID,
-              })
-              return
-            }
-          } catch (err) {
-            log(`[${HOOK_NAME}] Failed to check session existence`, {
-              sessionId: state.session_id,
-              error: String(err),
-            })
-          }
-        }
-        return
-      }
-
-      const transcriptPath = getTranscriptPath(sessionID)
-      const completionDetectedViaTranscript = detectCompletionPromise(transcriptPath, state.completion_promise)
-
-      const completionDetectedViaApi = completionDetectedViaTranscript
-        ? false
-        : await detectCompletionInSessionMessages(sessionID, state.completion_promise)
-
-      if (completionDetectedViaTranscript || completionDetectedViaApi) {
-        log(`[${HOOK_NAME}] Completion detected!`, {
+      const now = Date.now()
+      if (sessionState.lastInjectionTime && (now - sessionState.lastInjectionTime) < MIN_INTERVAL_BETWEEN_INJECTIONS_MS) {
+        log(`[${HOOK_NAME}] Skipped: too soon since last injection`, {
           sessionID,
-          iteration: state.iteration,
-          promise: state.completion_promise,
-          detectedVia: completionDetectedViaTranscript ? "transcript_file" : "session_messages_api",
+          elapsedMs: now - sessionState.lastInjectionTime,
         })
-        clearState(ctx.directory, stateDir)
-
-        const title = state.ultrawork
-          ? "ULTRAWORK LOOP COMPLETE!"
-          : "Ralph Loop Complete!"
-        const message = state.ultrawork
-          ? `JUST ULW ULW! Task completed after ${state.iteration} iteration(s)`
-          : `Task completed after ${state.iteration} iteration(s)`
-
-        await ctx.client.tui
-          .showToast({
-            body: {
-              title,
-              message,
-              variant: "success",
-              duration: 5000,
-            },
-          })
-          .catch(() => {})
-
         return
       }
 
-      if (state.iteration >= state.max_iterations) {
-        log(`[${HOOK_NAME}] Max iterations reached`, {
-          sessionID,
-          iteration: state.iteration,
-          max: state.max_iterations,
-        })
-        clearState(ctx.directory, stateDir)
-
-        await ctx.client.tui
-          .showToast({
-            body: {
-              title: "Ralph Loop Stopped",
-              message: `Max iterations (${state.max_iterations}) reached without completion`,
-              variant: "warning",
-              duration: 5000,
-            },
-          })
-          .catch(() => {})
-
-        return
-      }
-
-      const newState = incrementIteration(ctx.directory, stateDir)
-      if (!newState) {
-        log(`[${HOOK_NAME}] Failed to increment iteration`, { sessionID })
-        return
-      }
-
-      log(`[${HOOK_NAME}] Continuing loop`, {
-        sessionID,
-        iteration: newState.iteration,
-        max: newState.max_iterations,
-      })
-
-      const continuationPrompt = CONTINUATION_PROMPT.replace("{{ITERATION}}", String(newState.iteration))
-        .replace("{{MAX}}", String(newState.max_iterations))
-        .replace("{{PROMISE}}", newState.completion_promise)
-        .replace("{{PROMPT}}", newState.prompt)
-
-      const finalPrompt = newState.ultrawork
-        ? `ultrawork ${continuationPrompt}`
-        : continuationPrompt
-
-      await ctx.client.tui
-        .showToast({
-          body: {
-            title: "Ralph Loop",
-            message: `Iteration ${newState.iteration}/${newState.max_iterations}`,
-            variant: "info",
-            duration: 2000,
-          },
-        })
-        .catch(() => {})
+      sessionState.isHandlingIdle = true
 
       try {
+        const state = readState(ctx.directory, stateDir)
+        if (!state || !state.active) {
+          return
+        }
+
+        if (state.session_id && state.session_id !== sessionID) {
+          if (checkSessionExists) {
+            try {
+              const originalSessionExists = await checkSessionExists(state.session_id)
+              if (!originalSessionExists) {
+                clearState(ctx.directory, stateDir)
+                log(`[${HOOK_NAME}] Cleared orphaned state from deleted session`, {
+                  orphanedSessionId: state.session_id,
+                  currentSessionId: sessionID,
+                })
+                return
+              }
+            } catch (err) {
+              log(`[${HOOK_NAME}] Failed to check session existence`, {
+                sessionId: state.session_id,
+                error: String(err),
+              })
+            }
+          }
+          return
+        }
+
+        const hasOutput = await sessionHasAssistantOutput(sessionID)
+        if (!hasOutput) {
+          log(`[${HOOK_NAME}] Skipped: no assistant output yet`, { sessionID })
+          return
+        }
+
+        const transcriptPath = getTranscriptPath(sessionID)
+        const completionDetectedViaTranscript = detectCompletionPromise(transcriptPath, state.completion_promise)
+
+        const completionDetectedViaApi = completionDetectedViaTranscript
+          ? false
+          : await detectCompletionInSessionMessages(sessionID, state.completion_promise)
+
+        if (completionDetectedViaTranscript || completionDetectedViaApi) {
+          log(`[${HOOK_NAME}] Completion detected!`, {
+            sessionID,
+            iteration: state.iteration,
+            promise: state.completion_promise,
+            detectedVia: completionDetectedViaTranscript ? "transcript_file" : "session_messages_api",
+          })
+          clearState(ctx.directory, stateDir)
+
+          const title = state.ultrawork
+            ? "ULTRAWORK LOOP COMPLETE!"
+            : "Ralph Loop Complete!"
+          const message = state.ultrawork
+            ? `JUST ULW ULW! Task completed after ${state.iteration} iteration(s)`
+            : `Task completed after ${state.iteration} iteration(s)`
+
+          await ctx.client.tui
+            .showToast({
+              body: {
+                title,
+                message,
+                variant: "success",
+                duration: 5000,
+              },
+            })
+            .catch(() => {})
+
+          return
+        }
+
+        if (state.iteration >= state.max_iterations) {
+          log(`[${HOOK_NAME}] Max iterations reached`, {
+            sessionID,
+            iteration: state.iteration,
+            max: state.max_iterations,
+          })
+          clearState(ctx.directory, stateDir)
+
+          await ctx.client.tui
+            .showToast({
+              body: {
+                title: "Ralph Loop Stopped",
+                message: `Max iterations (${state.max_iterations}) reached without completion`,
+                variant: "warning",
+                duration: 5000,
+              },
+            })
+            .catch(() => {})
+
+          return
+        }
+
+        const nextIteration = state.iteration + 1
+        log(`[${HOOK_NAME}] Continuing loop`, {
+          sessionID,
+          iteration: nextIteration,
+          max: state.max_iterations,
+        })
+
+        const continuationPrompt = CONTINUATION_PROMPT.replace("{{ITERATION}}", String(nextIteration))
+          .replace("{{MAX}}", String(state.max_iterations))
+          .replace("{{PROMISE}}", state.completion_promise)
+          .replace("{{PROMPT}}", state.prompt)
+
+        const finalPrompt = state.ultrawork
+          ? `ultrawork ${continuationPrompt}`
+          : continuationPrompt
+
+        await ctx.client.tui
+          .showToast({
+            body: {
+              title: "Ralph Loop",
+              message: `Iteration ${nextIteration}/${state.max_iterations}`,
+              variant: "info",
+              duration: 2000,
+            },
+          })
+          .catch(() => {})
+
         let agent: string | undefined
         let model: { providerID: string; modelID: string } | undefined
 
         try {
           const messagesResp = await ctx.client.session.messages({ path: { id: sessionID } })
-          const messages = (messagesResp.data ?? []) as Array<{
+          const rawMessages = (messagesResp as { data?: unknown[]; "200"?: unknown[] }).data
+            ?? (messagesResp as { "200"?: unknown[] })["200"]
+            ?? (Array.isArray(messagesResp) ? messagesResp : [])
+          const messages = rawMessages as Array<{
             info?: { agent?: string; model?: { providerID: string; modelID: string }; modelID?: string; providerID?: string }
           }>
           for (let i = messages.length - 1; i >= 0; i--) {
@@ -373,11 +430,16 @@ export function createRalphLoopHook(
           },
           query: { directory: ctx.directory },
         })
+
+        incrementIteration(ctx.directory, stateDir)
+        sessionState.lastInjectionTime = Date.now()
       } catch (err) {
         log(`[${HOOK_NAME}] Failed to inject continuation`, {
           sessionID,
           error: String(err),
         })
+      } finally {
+        sessionState.isHandlingIdle = false
       }
     }
 
