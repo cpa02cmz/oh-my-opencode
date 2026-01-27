@@ -1,41 +1,35 @@
 import { z } from "zod"
 
-export const TaskStatusSchema = z.enum(["pending", "in_progress", "completed"])
+export const TaskStatusSchema = z.enum(["open", "in_progress", "completed"])
 export type TaskStatus = z.infer<typeof TaskStatusSchema>
 
 export const TaskSchema = z.object({
   id: z.string(),
-  subject: z.string(),
+  title: z.string(),
   description: z.string(),
-  activeForm: z.string().optional(),
-  owner: z.string().optional(),
   status: TaskStatusSchema,
-  blocks: z.array(z.string()),
-  blockedBy: z.array(z.string()),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-})
+  dependsOn: z.array(z.string()),
+  owner: z.string().optional(),
+  parentID: z.string().optional(),
+  repoURL: z.string().optional(),
+  threadID: z.string().optional(),
+}).strict()
 
 export type Task = z.infer<typeof TaskSchema>
 
-export const TaskCreateInputSchema = z.object({
-  subject: z.string().describe("Task title"),
-  description: z.string().describe("Detailed description"),
-  activeForm: z.string().optional().describe("Text shown when in progress"),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-})
-
-export type TaskCreateInput = z.infer<typeof TaskCreateInputSchema>
-
-export const TaskUpdateInputSchema = z.object({
-  taskId: z.string().describe("Task ID to update"),
-  subject: z.string().optional(),
+export const TaskToolInputSchema = z.object({
+  action: z.enum(["create", "list", "get", "update", "delete"]),
+  taskID: z.string().optional(),
+  title: z.string().optional(),
   description: z.string().optional(),
-  activeForm: z.string().optional(),
-  status: z.enum(["pending", "in_progress", "completed", "deleted"]).optional(),
-  addBlocks: z.array(z.string()).optional().describe("Task IDs this task will block"),
-  addBlockedBy: z.array(z.string()).optional().describe("Task IDs that block this task"),
+  status: TaskStatusSchema.optional(),
+  dependsOn: z.array(z.string()).optional(),
+  parentID: z.string().optional(),
+  repoURL: z.string().optional(),
+  threadID: z.string().optional(),
   owner: z.string().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  limit: z.number().optional(),
+  ready: z.boolean().optional(),
 })
 
-export type TaskUpdateInput = z.infer<typeof TaskUpdateInputSchema>
+export type TaskToolInput = z.infer<typeof TaskToolInputSchema>

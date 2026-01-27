@@ -313,7 +313,7 @@ export const GitMasterConfigSchema = z.object({
   include_co_authored_by: z.boolean().default(true),
 })
 
-export const BrowserAutomationProviderSchema = z.enum(["playwright", "agent-browser"])
+export const BrowserAutomationProviderSchema = z.enum(["playwright", "agent-browser", "dev-browser"])
 
 export const BrowserAutomationConfigSchema = z.object({
   /**
