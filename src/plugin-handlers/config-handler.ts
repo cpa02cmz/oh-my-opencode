@@ -307,7 +307,7 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
         : {};
 
       const planDemoteConfig = replacePlan && agentConfig["prometheus"]
-        ? { ...agentConfig["prometheus"], name: "plan", mode: "subagent" as const }
+        ? { ...agentConfig["prometheus"], name: "plan", mode: "all" as const }
         : undefined;
 
       config.agent = {
