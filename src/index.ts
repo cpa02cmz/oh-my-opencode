@@ -1,4 +1,4 @@
-import type { Plugin } from "@opencode-ai/plugin";
+import type { Plugin, ToolDefinition } from "@opencode-ai/plugin";
 import {
   createTodoContinuationEnforcer,
   createContextWindowMonitorHook,
@@ -81,7 +81,7 @@ import {
   taskGetTool,
   taskResumeTool,
   taskWaitTool,
-  teammateTool,
+  createTeammateTool,
   sendMessageTool,
 } from "./tools";
 import { BackgroundManager } from "./features/background-agent";
@@ -399,9 +399,9 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     : null
 
   const sisyphusSwarmTools = sisyphusSwarmEnabled ? {
-    teammate: teammateTool,
+    teammate: createTeammateTool(swarmManager),
     send_message: sendMessageTool,
-  } as Record<string, typeof teammateTool> : {}
+  } as Record<string, ToolDefinition> : {}
 
   const disabledToolsSet = new Set(pluginConfig.disabled_tools ?? [])
   if (sisyphusTasksEnabled) {
