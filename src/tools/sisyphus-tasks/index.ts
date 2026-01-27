@@ -1,2 +1,6 @@
 export { taskAbortTool } from "./task-abort"
 export { taskRemoveTool } from "./task-remove"
+export { taskListTool } from "./task-list"
+export { taskCreateTool } from "./task-create"
+export { taskUpdateTool } from "./task-update"
+export { taskSuspendTool } from "./task-suspend"

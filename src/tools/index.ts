@@ -69,3 +69,21 @@ export const builtinTools: Record<string, ToolDefinition> = {
   session_search,
   session_info,
 }
+
+export {
+  taskListTool,
+  taskCreateTool,
+  taskAbortTool,
+  taskRemoveTool,
+  taskUpdateTool,
+  taskSuspendTool,
+} from "./sisyphus-tasks"
+
+export { teammateTool } from "./sisyphus-swarm"
+
+export {
+  taskExecuteTool,
+  taskGetTool,
+  taskResumeTool,
+  taskWaitTool,
+} from "../features/sisyphus-tasks"
