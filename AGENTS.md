@@ -52,6 +52,8 @@ oh-my-opencode/
 | Config schema | `src/config/schema.ts` | Zod schema, run `bun run build:schema` |
 | Background agents | `src/features/background-agent/` | manager.ts (1377 lines) |
 | Orchestrator | `src/hooks/atlas/` | Main orchestration hook (752 lines) |
+| Sisyphus Tasks | `src/features/sisyphus-tasks/` | Task management, file-based storage |
+| Sisyphus Swarm | `src/features/sisyphus-swarm/` | Multi-agent coordination, mailbox IPC |
 
 ## TDD (Test-Driven Development)
 
