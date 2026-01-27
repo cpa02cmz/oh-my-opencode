@@ -27,4 +27,7 @@ export type {
   RalphLoopConfig,
   TmuxConfig,
   TmuxLayout,
+  SisyphusConfig,
+  SisyphusTasksConfig,
+  SisyphusSwarmConfig,
 } from "./schema"

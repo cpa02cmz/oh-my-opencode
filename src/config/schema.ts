@@ -88,6 +88,7 @@ export const HookNameSchema = z.enum([
   "sisyphus-junior-notepad",
   "start-work",
   "atlas",
+  "tasks-todowrite-disabler",
 ])
 
 export const BuiltinCommandNameSchema = z.enum([
