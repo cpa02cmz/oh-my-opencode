@@ -1,15 +1,16 @@
+import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { readdirSync } from "fs"
 import { join } from "path"
 import { readJsonSafe } from "../../features/sisyphus-tasks/storage"
 import { TaskSchema, type Task } from "../../features/sisyphus-tasks/types"
 
-export const taskListTool = {
-  name: "TaskList",
+export const taskListTool: ToolDefinition = tool({
   description: "List all tasks in the current task list",
-  inputSchema: {},
-
-  async execute(_input: Record<string, never>, context?: { taskDir?: string }): Promise<string> {
-    const taskDir = context?.taskDir ?? process.cwd()
+  args: {
+    task_dir: tool.schema.string().optional().describe("Task directory (defaults to current working directory)"),
+  },
+  execute: async (args) => {
+    const taskDir = args.task_dir ?? process.cwd()
 
     const files = readdirSync(taskDir).filter((f: string) => f.endsWith(".json") && !f.startsWith("."))
     if (files.length === 0) return "No tasks found."
@@ -34,4 +35,4 @@ export const taskListTool = {
 
     return lines.join("\n")
   }
-}
+})

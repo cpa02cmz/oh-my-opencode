@@ -1,36 +1,35 @@
+import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { unlinkSync, readdirSync, existsSync } from "fs"
 import { readJsonSafe, writeJsonAtomic } from "../../features/sisyphus-tasks/storage"
 import { TaskSchema } from "../../features/sisyphus-tasks/types"
 
-export const taskAbortTool = {
-  name: "TaskAbort",
+export const taskAbortTool: ToolDefinition = tool({
   description: "Abort and delete a task",
-  inputSchema: { taskId: { type: "string" } },
+  args: {
+    task_id: tool.schema.string().describe("Task ID to abort"),
+    task_dir: tool.schema.string().optional().describe("Task directory (defaults to current working directory)"),
+  },
+  execute: async (args) => {
+    const taskDir = args.task_dir ?? process.cwd()
+    const taskPath = join(taskDir, `${args.task_id}.json`)
 
-  async execute(
-    input: { taskId: string },
-    context?: { taskDir?: string }
-  ): Promise<{ success: boolean }> {
-    const taskDir = context?.taskDir ?? process.cwd()
-    const taskPath = join(taskDir, `${input.taskId}.json`)
-
-    if (!existsSync(taskPath)) return { success: false }
+    if (!existsSync(taskPath)) return JSON.stringify({ success: false })
 
     const files = readdirSync(taskDir).filter(
-      (f) => f.endsWith(".json") && f !== `${input.taskId}.json`
+      (f) => f.endsWith(".json") && f !== `${args.task_id}.json`
     )
     for (const file of files) {
       const otherPath = join(taskDir, file)
       const other = readJsonSafe(otherPath, TaskSchema)
       if (other) {
         let changed = false
-        if (other.blocks.includes(input.taskId)) {
-          other.blocks = other.blocks.filter((id) => id !== input.taskId)
+        if (other.blocks.includes(args.task_id)) {
+          other.blocks = other.blocks.filter((id) => id !== args.task_id)
           changed = true
         }
-        if (other.blockedBy.includes(input.taskId)) {
-          other.blockedBy = other.blockedBy.filter((id) => id !== input.taskId)
+        if (other.blockedBy.includes(args.task_id)) {
+          other.blockedBy = other.blockedBy.filter((id) => id !== args.task_id)
           changed = true
         }
         if (changed) writeJsonAtomic(otherPath, other)
@@ -38,6 +37,6 @@ export const taskAbortTool = {
     }
 
     unlinkSync(taskPath)
-    return { success: true }
+    return JSON.stringify({ success: true })
   },
-}
+})
