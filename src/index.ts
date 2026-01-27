@@ -82,8 +82,10 @@ import {
   taskResumeTool,
   taskWaitTool,
   teammateTool,
+  sendMessageTool,
 } from "./tools";
 import { BackgroundManager } from "./features/background-agent";
+import { SwarmManager } from "./features/sisyphus-swarm";
 import { SkillMcpManager } from "./features/skill-mcp-manager";
 import { initTaskToastManager } from "./features/task-toast-manager";
 import { TmuxSessionManager } from "./features/tmux-subagent";
@@ -389,8 +391,16 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     task_wait: taskWaitTool,
   } as Record<string, typeof taskListTool> : {}
 
+  const swarmConfig = pluginConfig.sisyphus?.swarm
+  const swarmManager = sisyphusSwarmEnabled && swarmConfig
+    ? new SwarmManager(backgroundManager, swarmConfig, {
+        tmuxEnabled: swarmConfig.ui_mode === "tmux" || swarmConfig.ui_mode === "both",
+      })
+    : null
+
   const sisyphusSwarmTools = sisyphusSwarmEnabled ? {
     teammate: teammateTool,
+    send_message: sendMessageTool,
   } as Record<string, typeof teammateTool> : {}
 
   const disabledToolsSet = new Set(pluginConfig.disabled_tools ?? [])
@@ -556,6 +566,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
          const sessionInfo = props?.info as { id?: string } | undefined;
          if (sessionInfo?.id === getMainSessionID()) {
            setMainSession(undefined);
+           swarmManager?.cleanup();
          }
          if (sessionInfo?.id) {
            clearSessionAgent(sessionInfo.id);
