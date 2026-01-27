@@ -80,9 +80,3 @@ export {
 } from "./sisyphus-tasks"
 
 export { createTeammateTool, sendMessageTool } from "./sisyphus-swarm"
-
-export {
-  taskGetTool,
-  taskResumeTool,
-  taskWaitTool,
-} from "../features/sisyphus-tasks"

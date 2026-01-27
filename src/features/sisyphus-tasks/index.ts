@@ -1,6 +1,3 @@
-export { taskGetTool } from "./task-get"
-export { taskResumeTool } from "./task-resume"
-export { taskWaitTool } from "./task-wait"
-export { TaskSchema, TaskStatusSchema, TaskCreateInputSchema, TaskUpdateInputSchema } from "./types"
-export type { Task, TaskStatus, TaskCreateInput, TaskUpdateInput } from "./types"
+export { TaskSchema, TaskStatusSchema, TaskToolInputSchema } from "./types"
+export type { Task, TaskStatus, TaskToolInput } from "./types"
 export { ensureDir, readJsonSafe, writeJsonAtomic } from "./storage"
