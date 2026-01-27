@@ -9,13 +9,10 @@ Task management system ported from Claude Code. File-based storage with Zod vali
 ```
 sisyphus-tasks/
 ├── types.ts         # Task/TaskUpdate Zod schemas
-├── storage.ts       # File ops (ensureDir, readJsonSafe, writeJsonAtomic)
-├── task-execute.ts  # Atomic task claiming with lock check
-├── task-get.ts      # Single task retrieval
-├── task-resume.ts   # Resume with busy-check
-├── task-wait.ts     # Poll until completion
+├── storage.ts       # File ops (ensureDir, readJsonSafe, writeJsonAtomic, acquireLock)
+├── formatters.ts    # Tool output formatters
 ├── index.ts         # Barrel exports
-└── e2e.test.ts      # Full lifecycle tests
+└── ...
 ```
 
 ## TASK SCHEMA
@@ -23,14 +20,14 @@ sisyphus-tasks/
 ```typescript
 {
   id: string,
-  subject: string,
+  title: string,
   description: string,
-  activeForm?: string,
+  status: "open" | "in_progress" | "completed",
+  dependsOn: string[],
   owner?: string,
-  status: "pending" | "in_progress" | "completed",
-  blocks: string[],
-  blockedBy: string[],
-  metadata?: Record<string, unknown>
+  parentID?: string,
+  repoURL?: string,
+  threadID?: string
 }
 ```
 
@@ -38,16 +35,14 @@ sisyphus-tasks/
 
 | Tool | Purpose |
 |------|---------|
-| TaskList | List all tasks with status/blocking info |
-| TaskCreate | Create new task with auto ID |
-| TaskGet | Retrieve single task |
-| TaskUpdate | Update fields, manage dependencies |
-| TaskAbort | Delete task, clean up deps |
-| TaskRemove | Alias for TaskAbort |
-| TaskSuspend | Release claim, set pending |
-| TaskExecute | Atomic claim with blocking check |
-| TaskResume | Claim if agent not busy |
-| TaskWait | Poll until completed |
+| task_tool | Unified task management with 5 actions: create, list, get, update, delete |
+
+**Actions**:
+- `create`: Create task with title (required), supports parentID/repoURL/dependsOn
+- `list`: List tasks with optional filters (status, repoURL, ready, limit)
+- `get`: Retrieve single task by ID
+- `update`: Update any task field, returns nextTask when status → completed
+- `delete`: Delete task, blocks if children exist, cleans up dependsOn references
 
 ## CONFIG
 
@@ -65,10 +60,11 @@ sisyphus-tasks/
 
 ## KEY BEHAVIORS
 
-- **Atomic claiming**: TaskExecute checks owner + blockers atomically
-- **Bidirectional deps**: addBlockedBy updates both tasks
-- **Auto cleanup**: TaskAbort removes from other tasks' deps
-- **Agent busy check**: TaskResume fails if agent has active task
+- **File-based locking**: Uses `.lock` files to ensure atomic writes across multiple agents
+- **Ready filter**: `list` action can filter for tasks whose dependencies are all `completed`
+- **Next task suggestion**: `update` action returns the next `ready` task when a task is marked `completed`
+- **Child protection**: `delete` action blocks if the task has subtasks (parentID reference)
+- **Dependency cleanup**: `delete` action automatically removes the task ID from other tasks' `dependsOn` lists
 
 ## ANTI-PATTERNS
 

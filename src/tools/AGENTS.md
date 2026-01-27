@@ -25,7 +25,8 @@ tools/
 ├── skill-mcp/        # Skill MCP operations
 ├── slashcommand/     # Slash command dispatch
 ├── call-omo-agent/   # Direct agent invocation
-└── background-task/  # background_output, background_cancel
+├── background-task/  # background_output, background_cancel
+└── sisyphus-tasks/   # Unified task management (task_tool)
 ```
 
 ## TOOL CATEGORIES
@@ -37,6 +38,7 @@ tools/
 | Session | session_list, session_read, session_search, session_info | Direct |
 | Agent | delegate_task, call_omo_agent | Factory |
 | Background | background_output, background_cancel | Factory |
+| Tasks | task_tool | Direct |
 | System | interactive_bash, look_at | Mixed |
 | Skill | skill, skill_mcp, slashcommand | Factory |
 
