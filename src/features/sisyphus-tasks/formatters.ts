@@ -1,7 +1,7 @@
 import type { Task } from "./types"
 
 const STATUS_ICONS: Record<Task["status"], string> = {
-  pending: "○",
+  open: "○",
   in_progress: "●",
   completed: "✓",
 }
@@ -9,7 +9,7 @@ const STATUS_ICONS: Record<Task["status"], string> = {
 export function formatTaskList(tasks: Task[], completedIds: Set<string>): string {
   if (tasks.length === 0) return "No tasks found."
 
-  const pending = tasks.filter(t => t.status === "pending")
+  const open = tasks.filter(t => t.status === "open")
   const inProgress = tasks.filter(t => t.status === "in_progress")
   const completed = tasks.filter(t => t.status === "completed")
 
@@ -23,9 +23,9 @@ export function formatTaskList(tasks: Task[], completedIds: Set<string>): string
     lines.push("")
   }
 
-  if (pending.length > 0) {
-    lines.push(`**Pending (${pending.length})**`)
-    for (const t of pending) {
+  if (open.length > 0) {
+    lines.push(`**Open (${open.length})**`)
+    for (const t of open) {
       lines.push(formatTaskLine(t, completedIds))
     }
     lines.push("")
@@ -44,13 +44,13 @@ export function formatTaskList(tasks: Task[], completedIds: Set<string>): string
 function formatTaskLine(task: Task, completedIds: Set<string>): string {
   const icon = STATUS_ICONS[task.status]
   const ownerPart = task.owner ? ` @${task.owner}` : ""
-  const blockedBy = task.blockedBy.filter(id => !completedIds.has(id))
-  const blockedPart = blockedBy.length > 0 ? ` ⏳blocked by ${blockedBy.map(id => `#${id}`).join(", ")}` : ""
-  return `${icon} #${task.id} ${task.subject}${ownerPart}${blockedPart}`
+  const dependsOn = task.dependsOn.filter(id => !completedIds.has(id))
+  const dependsPart = dependsOn.length > 0 ? ` ⏳depends on ${dependsOn.map(id => `#${id}`).join(", ")}` : ""
+  return `${icon} #${task.id} ${task.title}${ownerPart}${dependsPart}`
 }
 
-export function formatTaskCreate(task: { id: string; subject: string }): string {
-  return `✓ Task #${task.id} created: "${task.subject}"`
+export function formatTaskCreate(task: { id: string; title: string }): string {
+  return `✓ Task #${task.id} created: "${task.title}"`
 }
 
 export function formatTaskGet(task: Task | null): string {
@@ -61,7 +61,7 @@ export function formatTaskGet(task: Task | null): string {
     ``,
     `| Field | Value |`,
     `|-------|-------|`,
-    `| Subject | ${task.subject} |`,
+    `| Title | ${task.title} |`,
     `| Status | ${STATUS_ICONS[task.status]} ${task.status} |`,
   ]
 
@@ -71,34 +71,11 @@ export function formatTaskGet(task: Task | null): string {
   if (task.description) {
     lines.push(`| Description | ${task.description} |`)
   }
-  if (task.blockedBy.length > 0) {
-    lines.push(`| Blocked by | ${task.blockedBy.map(id => `#${id}`).join(", ")} |`)
-  }
-  if (task.blocks.length > 0) {
-    lines.push(`| Blocks | ${task.blocks.map(id => `#${id}`).join(", ")} |`)
+  if (task.dependsOn.length > 0) {
+    lines.push(`| Depends on | ${task.dependsOn.map(id => `#${id}`).join(", ")} |`)
   }
 
   return lines.join("\n")
-}
-
-export function formatTaskExecute(result: {
-  success: boolean
-  reason?: string
-  task?: Task
-  blockedByTasks?: string[]
-}): string {
-  if (result.success && result.task) {
-    return `✓ Claimed task #${result.task.id}: "${result.task.subject}"\n  Status: ${STATUS_ICONS.in_progress} in_progress | Owner: @${result.task.owner}`
-  }
-
-  const reasons: Record<string, string> = {
-    task_not_found: "✗ Task not found",
-    already_claimed: `✗ Task #${result.task?.id} already claimed by @${result.task?.owner}`,
-    already_resolved: `✗ Task #${result.task?.id} already completed`,
-    blocked: `✗ Task #${result.task?.id} blocked by ${result.blockedByTasks?.map(id => `#${id}`).join(", ")}`,
-  }
-
-  return reasons[result.reason ?? ""] ?? "✗ Failed to execute task"
 }
 
 export function formatTaskUpdate(result: {
@@ -106,60 +83,55 @@ export function formatTaskUpdate(result: {
   taskId: string
   updatedFields: string[]
   error?: string
+  nextTask?: { id: string; title: string }
 }): string {
   if (!result.success) {
     return `✗ Failed to update task #${result.taskId}: ${result.error ?? "unknown error"}`
   }
 
-  if (result.updatedFields.includes("deleted")) {
-    return `✓ Task #${result.taskId} deleted`
+  let message = `✓ Task #${result.taskId} updated: ${result.updatedFields.join(", ")}`
+
+  if (result.nextTask) {
+    message += `\n\n📋 Next task: #${result.nextTask.id} — ${result.nextTask.title}`
   }
 
-  return `✓ Task #${result.taskId} updated: ${result.updatedFields.join(", ")}`
+  return message
 }
 
-export function formatTaskSuspend(result: { success: boolean; taskId?: string }): string {
-  if (result.success) {
-    return `✓ Task #${result.taskId} suspended (status → pending, owner cleared)`
-  }
-  return `✗ Failed to suspend task`
-}
-
-export function formatTaskAbort(result: { success: boolean; taskId: string }): string {
-  if (result.success) {
-    return `✓ Task #${result.taskId} aborted and removed`
-  }
-  return `✗ Failed to abort task #${result.taskId}`
-}
-
-export function formatTaskResume(result: {
+export function formatTaskDelete(result: {
   success: boolean
-  reason?: string
-  task?: Task
-  busyWithTasks?: string[]
-  blockedByTasks?: string[]
+  taskId: string
+  error?: string
+  blockedChildren?: string[]
 }): string {
-  if (result.success && result.task) {
-    return `✓ Resumed task #${result.task.id}: "${result.task.subject}"\n  Status: ${STATUS_ICONS.in_progress} in_progress | Owner: @${result.task.owner}`
+  if (!result.success) {
+    return `✗ Failed to delete task #${result.taskId}: ${result.error ?? "unknown error"}`
   }
 
-  if (result.reason === "agent_busy") {
-    return `✗ Agent busy with tasks: ${result.busyWithTasks?.map(id => `#${id}`).join(", ")}`
+  let message = `✓ Task #${result.taskId} deleted`
+
+  if (result.blockedChildren && result.blockedChildren.length > 0) {
+    message += `\n⚠️ These tasks were depending on it: ${result.blockedChildren.map(id => `#${id}`).join(", ")}`
   }
 
-  return `✗ Failed to resume task`
+  return message
 }
 
-export function formatTaskWait(result: {
-  completed: boolean
-  task?: Task
-  timedOut?: boolean
+export function formatNextTask(task: {
+  id: string
+  title: string
+  dependsOn: string[]
 }): string {
-  if (result.completed && result.task) {
-    return `✓ Task #${result.task.id} completed`
+  const lines = [
+    `📋 **Next Task: #${task.id}**`,
+    ``,
+    `**${task.title}**`,
+  ]
+
+  if (task.dependsOn.length > 0) {
+    lines.push(``)
+    lines.push(`⏳ Depends on: ${task.dependsOn.map(id => `#${id}`).join(", ")}`)
   }
-  if (result.timedOut && result.task) {
-    return `⏳ Timeout waiting for task #${result.task.id} (current status: ${result.task.status})`
-  }
-  return `○ Task not yet completed (status: ${result.task?.status ?? "unknown"})`
+
+  return lines.join("\n")
 }
