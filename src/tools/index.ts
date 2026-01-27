@@ -79,7 +79,7 @@ export {
   taskSuspendTool,
 } from "./sisyphus-tasks"
 
-export { teammateTool, sendMessageTool } from "./sisyphus-swarm"
+export { createTeammateTool, sendMessageTool } from "./sisyphus-swarm"
 
 export {
   taskGetTool,
