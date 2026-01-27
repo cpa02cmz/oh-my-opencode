@@ -9,13 +9,21 @@ Multi-agent coordination system ported from Claude Code. Supports teammate spawn
 ```
 sisyphus-swarm/
 ├── mailbox/
-│   ├── types.ts     # MailboxMessage, ProtocolMessage schemas
-│   └── mailbox.ts   # read/send/markAsRead/clearInbox
+│   ├── types.ts          # MailboxMessage, ProtocolMessage schemas
+│   ├── types.test.ts     # Schema validation tests
+│   ├── mailbox.ts        # read/send/markAsRead/clearInbox
+│   └── mailbox.test.ts   # Mailbox operation tests
 ├── permission-poller/
-│   └── index.ts     # Request/response with callbacks
+│   ├── index.ts          # Real polling + request/response callbacks
+│   └── index.test.ts     # Polling + callback tests
 ├── tmux-backend/
-│   └── index.ts     # Pane creation/styling/cleanup
-└── index.ts         # Future barrel exports
+│   ├── index.ts          # Pane creation/styling/cleanup
+│   └── index.test.ts     # Tmux backend tests
+├── swarm-manager.ts      # Lifecycle orchestrator (spawn → track → shutdown → cleanup)
+├── swarm-manager.test.ts # Manager lifecycle tests
+├── e2e.test.ts           # Integration tests
+├── index.ts              # Barrel exports (SwarmManager, TeammateState)
+└── AGENTS.md             # This file
 ```
 
 ## MAILBOX PROTOCOL
@@ -45,6 +53,7 @@ ProtocolMessage types:
 | Tool | Purpose |
 |------|---------|
 | TeammateTool | Spawn new teammate agent |
+| SendMessageTool | Send messages to agents via mailbox |
 
 ## CONFIG
 
@@ -64,8 +73,15 @@ ProtocolMessage types:
 
 - **File-based IPC**: Messages stored as JSON arrays
 - **Inbox per agent**: `{teamDir}/inboxes/{agentName}.json`
-- **Permission flow**: Request → Poll → Response callback
-- **tmux integration**: Pane split for visual monitoring
+- **Permission flow**: Request → Real polling via `getUnreadMessages` → Response callback
+- **tmux integration**: Pane split for visual monitoring when `ui_mode` is "tmux" or "both"
+- **SwarmManager lifecycle**: 
+  - `spawn()`: Create teammate agent, register in BackgroundManager
+  - `track()`: Monitor agent state via permission poller
+  - `shutdown()`: Request graceful shutdown via mailbox
+  - `cleanup()`: Remove tmux pane (if applicable), clear inbox
+- **Integration**: SwarmManager coordinates with BackgroundManager for agent lifecycle
+- **Real polling**: Permission poller uses `getUnreadMessages` + `PermissionResponseSchema.safeParse` for validation
 
 ## ANTI-PATTERNS
 
