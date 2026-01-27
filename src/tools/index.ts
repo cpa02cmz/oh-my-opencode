@@ -82,7 +82,6 @@ export {
 export { teammateTool } from "./sisyphus-swarm"
 
 export {
-  taskExecuteTool,
   taskGetTool,
   taskResumeTool,
   taskWaitTool,

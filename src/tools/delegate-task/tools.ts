@@ -1,6 +1,8 @@
 import { tool, type PluginInput, type ToolDefinition } from "@opencode-ai/plugin"
 import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
+import { readJsonSafe, writeJsonAtomic } from "../../features/sisyphus-tasks/storage"
+import { TaskSchema, type Task } from "../../features/sisyphus-tasks/types"
 import type { BackgroundManager } from "../../features/background-agent"
 import type { DelegateTaskArgs } from "./types"
 import type { CategoryConfig, CategoriesConfig, GitMasterConfig, BrowserAutomationProvider } from "../../config/schema"
@@ -245,6 +247,10 @@ Prompts MUST be in English.`
       subagent_type: tool.schema.string().optional().describe("Agent name (e.g., 'oracle', 'explore'). Mutually exclusive with category."),
       session_id: tool.schema.string().optional().describe("Existing Task session to continue"),
       command: tool.schema.string().optional().describe("The command that triggered this task"),
+      execute: tool.schema.object({
+        task_id: tool.schema.string(),
+        task_dir: tool.schema.string().optional(),
+      }).optional().describe("Execute/claim a task before spawning agent. task_id required, task_dir defaults to cwd."),
     },
     async execute(args: DelegateTaskArgs, toolContext) {
       const ctx = toolContext as ToolContextWithMetadata
@@ -854,6 +860,62 @@ To continue this session: session_id="${task.sessionID}"`
       let taskId: string | undefined
       let syncSessionID: string | undefined
 
+      // Read and validate task early if execute parameter provided
+      let executeTask: Task | null = null
+      let executeTaskDir: string | undefined
+      let executeTaskPath: string | undefined
+
+      if (args.execute) {
+        executeTaskDir = args.execute.task_dir ?? process.cwd()
+        executeTaskPath = join(executeTaskDir, `${args.execute.task_id}.json`)
+        executeTask = readJsonSafe(executeTaskPath, TaskSchema)
+
+        if (!executeTask) {
+          return `Task not found: ${args.execute.task_id}`
+        }
+        if (executeTask.owner && executeTask.status === "in_progress") {
+          return `Task ${args.execute.task_id} already claimed by ${executeTask.owner}`
+        }
+        if (executeTask.status === "completed") {
+          return `Task ${args.execute.task_id} already completed`
+        }
+
+        const blockers: string[] = []
+        for (const blockerId of executeTask.blockedBy) {
+          const blocker = readJsonSafe(join(executeTaskDir, `${blockerId}.json`), TaskSchema)
+          if (blocker && blocker.status !== "completed") {
+            blockers.push(blockerId)
+          }
+        }
+        if (blockers.length > 0) {
+          return `Task ${args.execute.task_id} blocked by: ${blockers.join(", ")}`
+        }
+      }
+
+      // Compose effective prompt and description
+      const effectiveDescription = args.description || (executeTask?.subject ?? "Task execution")
+      let effectivePrompt = args.prompt
+
+      if (executeTask) {
+        const taskPromptParts = [
+          `## Task: ${executeTask.subject}`,
+          "",
+          "## Description",
+          executeTask.description || "(none)",
+          "",
+          "## Task Metadata",
+          `- Task ID: ${executeTask.id}`,
+          `- Status: in_progress`,
+          `- Blocked By: ${executeTask.blockedBy.length > 0 ? executeTask.blockedBy.join(", ") : "none"}`,
+        ]
+
+        if (args.prompt) {
+          taskPromptParts.push("", "## Additional Instructions", args.prompt)
+        }
+
+        effectivePrompt = taskPromptParts.join("\n")
+      }
+
       try {
         const parentSession = client.session.get
           ? await client.session.get({ path: { id: ctx.sessionID } }).catch(() => null)
@@ -863,7 +925,7 @@ To continue this session: session_id="${task.sessionID}"`
         const createResult = await client.session.create({
           body: {
             parentID: ctx.sessionID,
-            title: `Task: ${args.description}`,
+            title: `Task: ${effectiveDescription}`,
             permission: [
               { permission: "question", action: "deny" as const, pattern: "*" },
             ],
@@ -881,12 +943,19 @@ To continue this session: session_id="${task.sessionID}"`
         syncSessionID = sessionID
         subagentSessions.add(sessionID)
 
+        // Claim the task with the new session ID
+        if (executeTask && executeTaskPath) {
+          executeTask.owner = sessionID
+          executeTask.status = "in_progress"
+          writeJsonAtomic(executeTaskPath, executeTask)
+        }
+
         if (onSyncSessionCreated) {
           log("[delegate_task] Invoking onSyncSessionCreated callback", { sessionID, parentID: ctx.sessionID })
           await onSyncSessionCreated({
             sessionID,
             parentID: ctx.sessionID,
-            title: args.description,
+            title: effectiveDescription,
           }).catch((err) => {
             log("[delegate_task] onSyncSessionCreated callback failed", { error: String(err) })
           })
@@ -899,7 +968,7 @@ To continue this session: session_id="${task.sessionID}"`
         if (toastManager) {
           toastManager.addTask({
             id: taskId,
-            description: args.description,
+            description: effectiveDescription,
             agent: agentToUse,
             isBackground: false,
             category: args.category,
@@ -909,17 +978,18 @@ To continue this session: session_id="${task.sessionID}"`
         }
 
         ctx.metadata?.({
-          title: args.description,
+          title: effectiveDescription,
           metadata: {
-            prompt: args.prompt,
+            prompt: effectivePrompt,
             agent: agentToUse,
             category: args.category,
             load_skills: args.load_skills,
-            description: args.description,
+            description: effectiveDescription,
             run_in_background: args.run_in_background,
             sessionId: sessionID,
             sync: true,
             command: args.command,
+            task_id: args.execute?.task_id,
           },
         })
 
@@ -935,7 +1005,7 @@ To continue this session: session_id="${task.sessionID}"`
                 call_omo_agent: true,
                 question: false,
               },
-              parts: [{ type: "text", text: args.prompt }],
+              parts: [{ type: "text", text: effectivePrompt }],
               ...(categoryModel ? { model: { providerID: categoryModel.providerID, modelID: categoryModel.modelID } } : {}),
               ...(categoryModel?.variant ? { variant: categoryModel.variant } : {}),
             },

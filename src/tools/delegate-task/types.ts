@@ -7,4 +7,8 @@ export interface DelegateTaskArgs {
   session_id?: string
   command?: string
   load_skills: string[]
+  execute?: {
+    task_id: string
+    task_dir?: string
+  }
 }
