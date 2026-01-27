@@ -4,6 +4,7 @@ import { join } from "path"
 import { taskListTool } from "./task-list"
 
 const TEST_DIR = join(import.meta.dirname, ".test-task-list")
+const mockContext = {} as Parameters<typeof taskListTool.execute>[1]
 
 describe("TaskList Tool", () => {
   beforeEach(() => {
@@ -16,7 +17,7 @@ describe("TaskList Tool", () => {
   //#when listing tasks
   //#then return empty message
   it("returns message for empty list", async () => {
-    const result = await taskListTool.execute({}, { taskDir: join(TEST_DIR, "tasks", "test-list") })
+    const result = await taskListTool.execute({ task_dir: join(TEST_DIR, "tasks", "test-list") }, mockContext)
     expect(result).toContain("No tasks")
   })
 
@@ -32,12 +33,12 @@ describe("TaskList Tool", () => {
       id: "2", subject: "Add tests", description: "desc", status: "in_progress", owner: "agent-1", blocks: [], blockedBy: ["1"]
     }))
     
-    const result = await taskListTool.execute({}, { taskDir })
+    const result = await taskListTool.execute({ task_dir: taskDir }, mockContext)
     expect(result).toContain("#1")
-    expect(result).toContain("[pending]")
+    expect(result).toContain("Pending")
     expect(result).toContain("Fix bug")
     expect(result).toContain("#2")
-    expect(result).toContain("[in_progress]")
+    expect(result).toContain("In Progress")
     expect(result).toContain("agent-1")
     expect(result).toContain("blocked by #1")
   })
@@ -54,7 +55,7 @@ describe("TaskList Tool", () => {
       id: "2", subject: "Blocked task", description: "desc", status: "pending", blocks: [], blockedBy: ["1"]
     }))
     
-    const result = await taskListTool.execute({}, { taskDir })
-    expect(result).not.toContain("blocked by #1")
+    const result = await taskListTool.execute({ task_dir: taskDir }, mockContext)
+    expect(result.includes("blocked by #1")).toBe(false)
   })
 })

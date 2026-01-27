@@ -3,6 +3,7 @@ import { join } from "path"
 import { unlinkSync } from "fs"
 import { readJsonSafe, writeJsonAtomic } from "../../features/sisyphus-tasks/storage"
 import { TaskSchema, type Task } from "../../features/sisyphus-tasks/types"
+import { formatTaskUpdate } from "../../features/sisyphus-tasks/formatters"
 
 export const taskUpdateTool: ToolDefinition = tool({
   description: "Update a task",
@@ -23,12 +24,12 @@ export const taskUpdateTool: ToolDefinition = tool({
     const task = readJsonSafe(taskPath, TaskSchema)
 
     if (!task) {
-      return JSON.stringify({ success: false, taskId: args.task_id, updatedFields: [], error: "task_not_found" })
+      return formatTaskUpdate({ success: false, taskId: args.task_id, updatedFields: [], error: "task_not_found" })
     }
 
     if (args.status === "deleted") {
       unlinkSync(taskPath)
-      return JSON.stringify({ success: true, taskId: args.task_id, updatedFields: ["deleted"] })
+      return formatTaskUpdate({ success: true, taskId: args.task_id, updatedFields: ["deleted"] })
     }
 
     const updatedFields: string[] = []
@@ -88,6 +89,6 @@ export const taskUpdateTool: ToolDefinition = tool({
     }
 
     writeJsonAtomic(taskPath, task)
-    return JSON.stringify({ success: true, taskId: args.task_id, updatedFields })
+    return formatTaskUpdate({ success: true, taskId: args.task_id, updatedFields })
   },
 })

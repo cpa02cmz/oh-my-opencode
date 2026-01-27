@@ -4,6 +4,7 @@ import { join } from "path"
 import { taskCreateTool } from "./task-create"
 
 const TEST_DIR = join(import.meta.dirname, ".test-task-create")
+const mockContext = {} as Parameters<typeof taskCreateTool.execute>[1]
 
 describe("TaskCreate Tool", () => {
   beforeEach(() => {
@@ -16,61 +17,64 @@ describe("TaskCreate Tool", () => {
   //#when creating task
   //#then create JSON file with correct structure
   it("creates task file with correct structure", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks", "test-list")
 
-    // when
+    //#when
     const result = await taskCreateTool.execute({
       subject: "Fix authentication bug",
-      description: "Users report 401 errors"
-    }, { taskDir })
+      description: "Users report 401 errors",
+      task_dir: taskDir
+    }, mockContext)
 
-    // then
-    expect(result.task.id).toBe("1")
-    expect(result.task.subject).toBe("Fix authentication bug")
+    //#then
+    expect(result).toContain("Task #1 created")
+    expect(result).toContain("Fix authentication bug")
     expect(existsSync(join(taskDir, "1.json"))).toBe(true)
 
     const saved = JSON.parse(readFileSync(join(taskDir, "1.json"), "utf-8"))
     expect(saved.status).toBe("pending")
-    expect(saved.blocks).toEqual([])
-    expect(saved.blockedBy).toEqual([])
+    expect(saved.blocks.length).toBe(0)
+    expect(saved.blockedBy.length).toBe(0)
   })
 
   //#given existing tasks
   //#when creating new task
   //#then generate sequential ID
   it("generates sequential ID", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks", "test-list")
     writeFileSync(join(taskDir, "1.json"), JSON.stringify({ id: "1" }))
     writeFileSync(join(taskDir, "2.json"), JSON.stringify({ id: "2" }))
 
-    // when
+    //#when
     const result = await taskCreateTool.execute({
       subject: "New task",
-      description: "Description"
-    }, { taskDir })
+      description: "Description",
+      task_dir: taskDir
+    }, mockContext)
 
-    // then
-    expect(result.task.id).toBe("3")
+    //#then
+    expect(result).toContain("Task #3 created")
   })
 
   //#given optional fields
   //#when creating task
   //#then include them in output
   it("includes optional fields", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks", "test-list")
 
-    // when
-    const result = await taskCreateTool.execute({
+    //#when
+    await taskCreateTool.execute({
       subject: "Task",
       description: "Desc",
-      activeForm: "Working on task",
-      metadata: { priority: "high" }
-    }, { taskDir })
+      active_form: "Working on task",
+      metadata: JSON.stringify({ priority: "high" }),
+      task_dir: taskDir
+    }, mockContext)
 
-    // then
+    //#then
     const saved = JSON.parse(readFileSync(join(taskDir, "1.json"), "utf-8"))
     expect(saved.activeForm).toBe("Working on task")
     expect(saved.metadata.priority).toBe("high")

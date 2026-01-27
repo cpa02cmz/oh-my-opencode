@@ -4,6 +4,7 @@ import { join } from "path"
 import { taskExecuteTool } from "./task-execute"
 
 const TEST_DIR = join(import.meta.dirname, ".test-task-execute")
+const mockContext = {} as Parameters<typeof taskExecuteTool.execute>[1]
 
 describe("TaskExecute Tool", () => {
   beforeEach(() => {
@@ -16,7 +17,7 @@ describe("TaskExecute Tool", () => {
   //#when executing
   //#then claim successfully
   it("claims available task", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(
       join(taskDir, "1.json"),
@@ -30,11 +31,12 @@ describe("TaskExecute Tool", () => {
       })
     )
 
-    // when
-    const result = await taskExecuteTool.execute({ taskId: "1", agentId: "agent-1" }, { taskDir })
+    //#when
+    const result = await taskExecuteTool.execute({ task_id: "1", agent_id: "agent-1", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.success).toBe(true)
+    //#then
+    expect(result).toContain("✓")
+    expect(result).toContain("Claimed task #1")
 
     const task = JSON.parse(readFileSync(join(taskDir, "1.json"), "utf-8"))
     expect(task.owner).toBe("agent-1")
@@ -45,7 +47,7 @@ describe("TaskExecute Tool", () => {
   //#when executing
   //#then fail with already_claimed
   it("fails if already claimed", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(
       join(taskDir, "1.json"),
@@ -60,19 +62,19 @@ describe("TaskExecute Tool", () => {
       })
     )
 
-    // when
-    const result = await taskExecuteTool.execute({ taskId: "1", agentId: "agent-1" }, { taskDir })
+    //#when
+    const result = await taskExecuteTool.execute({ task_id: "1", agent_id: "agent-1", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.success).toBe(false)
-    expect(result.reason).toBe("already_claimed")
+    //#then
+    expect(result).toContain("✗")
+    expect(result).toContain("already claimed")
   })
 
   //#given blocked task
   //#when executing
   //#then fail with blocked
   it("fails if blocked", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(
       join(taskDir, "1.json"),
@@ -97,20 +99,20 @@ describe("TaskExecute Tool", () => {
       })
     )
 
-    // when
-    const result = await taskExecuteTool.execute({ taskId: "2", agentId: "agent-1" }, { taskDir })
+    //#when
+    const result = await taskExecuteTool.execute({ task_id: "2", agent_id: "agent-1", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.success).toBe(false)
-    expect(result.reason).toBe("blocked")
-    expect(result.blockedByTasks).toContain("1")
+    //#then
+    expect(result).toContain("✗")
+    expect(result).toContain("blocked")
+    expect(result).toContain("#1")
   })
 
   //#given completed task
   //#when executing
   //#then fail
   it("fails if already completed", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(
       join(taskDir, "1.json"),
@@ -124,11 +126,11 @@ describe("TaskExecute Tool", () => {
       })
     )
 
-    // when
-    const result = await taskExecuteTool.execute({ taskId: "1", agentId: "agent-1" }, { taskDir })
+    //#when
+    const result = await taskExecuteTool.execute({ task_id: "1", agent_id: "agent-1", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.success).toBe(false)
-    expect(result.reason).toBe("already_resolved")
+    //#then
+    expect(result).toContain("✗")
+    expect(result).toContain("completed")
   })
 })

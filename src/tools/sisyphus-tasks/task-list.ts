@@ -3,6 +3,7 @@ import { readdirSync } from "fs"
 import { join } from "path"
 import { readJsonSafe } from "../../features/sisyphus-tasks/storage"
 import { TaskSchema, type Task } from "../../features/sisyphus-tasks/types"
+import { formatTaskList } from "../../features/sisyphus-tasks/formatters"
 
 export const taskListTool: ToolDefinition = tool({
   description: "List all tasks in the current task list",
@@ -26,13 +27,6 @@ export const taskListTool: ToolDefinition = tool({
       }
     }
 
-    const lines = tasks.map(t => {
-      const ownerPart = t.owner ? ` (${t.owner})` : ""
-      const blockedBy = t.blockedBy.filter(id => !completedIds.has(id))
-      const blockedPart = blockedBy.length > 0 ? ` [blocked by ${blockedBy.map(id => `#${id}`).join(", ")}]` : ""
-      return `#${t.id} [${t.status}] ${t.subject}${ownerPart}${blockedPart}`
-    })
-
-    return lines.join("\n")
+    return formatTaskList(tasks, completedIds)
   }
 })

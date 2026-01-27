@@ -4,6 +4,7 @@ import { join } from "path"
 import { taskGetTool } from "./task-get"
 
 const TEST_DIR = join(import.meta.dirname, ".test-task-get")
+const mockContext = {} as Parameters<typeof taskGetTool.execute>[1]
 
 describe("TaskGet Tool", () => {
   beforeEach(() => {
@@ -16,7 +17,7 @@ describe("TaskGet Tool", () => {
   //#when getting by ID
   //#then return full task object
   it("returns task when exists", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(
       join(taskDir, "1.json"),
@@ -30,25 +31,25 @@ describe("TaskGet Tool", () => {
       })
     )
 
-    // when
-    const result = await taskGetTool.execute({ taskId: "1" }, { taskDir })
+    //#when
+    const result = await taskGetTool.execute({ task_id: "1", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.task).not.toBeNull()
-    expect(result.task?.subject).toBe("Test")
+    //#then
+    expect(result).toContain("Task #1")
+    expect(result).toContain("Test")
   })
 
   //#given non-existent task
   //#when getting
   //#then return null
   it("returns null when not exists", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
 
-    // when
-    const result = await taskGetTool.execute({ taskId: "999" }, { taskDir })
+    //#when
+    const result = await taskGetTool.execute({ task_id: "999", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.task).toBeNull()
+    //#then
+    expect(result).toContain("Task not found")
   })
 })

@@ -2,6 +2,7 @@ import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { readJsonSafe } from "./storage"
 import { TaskSchema } from "./types"
+import { formatTaskWait } from "./formatters"
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -23,14 +24,14 @@ export const taskWaitTool: ToolDefinition = tool({
     
     while (Date.now() - startTime < timeout) {
       const task = readJsonSafe(taskPath, TaskSchema)
-      if (!task) return JSON.stringify({ completed: false, task: null })
-      if (task.status === "completed") return JSON.stringify({ completed: true, task })
+      if (!task) return formatTaskWait({ completed: false, task: undefined })
+      if (task.status === "completed") return formatTaskWait({ completed: true, task })
       
       await delay(pollInterval)
     }
     
     const task = readJsonSafe(taskPath, TaskSchema)
     const isCompleted = task?.status === "completed"
-    return JSON.stringify({ completed: isCompleted ?? false, task })
+    return formatTaskWait({ completed: isCompleted ?? false, task: task ?? undefined, timedOut: !isCompleted })
   }
 })

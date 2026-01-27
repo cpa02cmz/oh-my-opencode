@@ -4,6 +4,7 @@ import { join } from "path"
 import { taskAbortTool } from "./task-abort"
 
 const TEST_DIR = join(import.meta.dirname, ".test-task-abort")
+const mockContext = {} as Parameters<typeof taskAbortTool.execute>[1]
 
 describe("TaskAbort Tool", () => {
   beforeEach(() => {
@@ -16,7 +17,7 @@ describe("TaskAbort Tool", () => {
   //#when aborting
   //#then delete file
   it("deletes task file", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(
       join(taskDir, "1.json"),
@@ -30,10 +31,10 @@ describe("TaskAbort Tool", () => {
       })
     )
 
-    // when
-    await taskAbortTool.execute({ taskId: "1" }, { taskDir })
+    //#when
+    await taskAbortTool.execute({ task_id: "1", task_dir: taskDir }, mockContext)
 
-    // then
+    //#then
     expect(existsSync(join(taskDir, "1.json"))).toBe(false)
   })
 
@@ -41,7 +42,7 @@ describe("TaskAbort Tool", () => {
   //#when aborting
   //#then remove from other tasks' arrays
   it("removes from other tasks dependencies", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(
       join(taskDir, "1.json"),
@@ -66,25 +67,26 @@ describe("TaskAbort Tool", () => {
       })
     )
 
-    // when
-    await taskAbortTool.execute({ taskId: "1" }, { taskDir })
+    //#when
+    await taskAbortTool.execute({ task_id: "1", task_dir: taskDir }, mockContext)
 
-    // then
+    //#then
     const task2 = JSON.parse(readFileSync(join(taskDir, "2.json"), "utf-8"))
-    expect(task2.blockedBy).not.toContain("1")
+    expect(task2.blockedBy.includes("1")).toBe(false)
   })
 
   //#given non-existent task
   //#when aborting
   //#then return success false
   it("returns false for non-existent task", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
 
-    // when
-    const result = await taskAbortTool.execute({ taskId: "999" }, { taskDir })
+    //#when
+    const result = await taskAbortTool.execute({ task_id: "999", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.success).toBe(false)
+    //#then
+    expect(result).toContain("✗")
+    expect(result).toContain("Failed to abort")
   })
 })

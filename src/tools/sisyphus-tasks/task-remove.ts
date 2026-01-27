@@ -3,6 +3,7 @@ import { join } from "path"
 import { unlinkSync, readdirSync, existsSync } from "fs"
 import { readJsonSafe, writeJsonAtomic } from "../../features/sisyphus-tasks/storage"
 import { TaskSchema } from "../../features/sisyphus-tasks/types"
+import { formatTaskAbort } from "../../features/sisyphus-tasks/formatters"
 
 export const taskRemoveTool: ToolDefinition = tool({
   description: "Remove a task (alias for TaskAbort)",
@@ -14,7 +15,7 @@ export const taskRemoveTool: ToolDefinition = tool({
     const taskDir = args.task_dir ?? process.cwd()
     const taskPath = join(taskDir, `${args.task_id}.json`)
 
-    if (!existsSync(taskPath)) return JSON.stringify({ success: false })
+    if (!existsSync(taskPath)) return formatTaskAbort({ success: false, taskId: args.task_id })
 
     const files = readdirSync(taskDir).filter(
       (f) => f.endsWith(".json") && f !== `${args.task_id}.json`
@@ -37,6 +38,6 @@ export const taskRemoveTool: ToolDefinition = tool({
     }
 
     unlinkSync(taskPath)
-    return JSON.stringify({ success: true })
+    return formatTaskAbort({ success: true, taskId: args.task_id })
   },
 })

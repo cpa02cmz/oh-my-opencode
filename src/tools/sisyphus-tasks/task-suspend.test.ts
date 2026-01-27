@@ -4,6 +4,7 @@ import { join } from "path"
 import { taskSuspendTool } from "./task-suspend"
 
 const TEST_DIR = join(import.meta.dirname, ".test-task-suspend")
+const mockContext = {} as Parameters<typeof taskSuspendTool.execute>[1]
 
 describe("TaskSuspend Tool", () => {
   beforeEach(() => {
@@ -16,20 +17,21 @@ describe("TaskSuspend Tool", () => {
   //#when suspending
   //#then set pending and clear owner
   it("suspends task", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(join(taskDir, "1.json"), JSON.stringify({
       id: "1", subject: "A", description: "D", status: "in_progress", owner: "agent-1", blocks: [], blockedBy: []
     }))
     
-    // when
-    const result = await taskSuspendTool.execute({ taskId: "1" }, { taskDir })
+    //#when
+    const result = await taskSuspendTool.execute({ task_id: "1", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.success).toBe(true)
+    //#then
+    expect(result).toContain("✓")
+    expect(result).toContain("suspended")
     
     const task = JSON.parse(readFileSync(join(taskDir, "1.json"), "utf-8"))
     expect(task.status).toBe("pending")
-    expect(task.owner).toBeUndefined()
+    expect(task.owner).toBe(undefined)
   })
 })

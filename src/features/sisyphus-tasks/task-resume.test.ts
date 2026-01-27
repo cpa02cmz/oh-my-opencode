@@ -4,6 +4,7 @@ import { join } from "path"
 import { taskResumeTool } from "./task-resume"
 
 const TEST_DIR = join(import.meta.dirname, ".test-task-resume")
+const mockContext = {} as Parameters<typeof taskResumeTool.execute>[1]
 
 describe("TaskResume Tool", () => {
   beforeEach(() => {
@@ -16,7 +17,7 @@ describe("TaskResume Tool", () => {
   //#when resuming task
   //#then succeed
   it("resumes if agent not busy", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(
       join(taskDir, "1.json"),
@@ -30,18 +31,19 @@ describe("TaskResume Tool", () => {
       })
     )
 
-    // when
-    const result = await taskResumeTool.execute({ taskId: "1", agentId: "agent-1" }, { taskDir })
+    //#when
+    const result = await taskResumeTool.execute({ task_id: "1", agent_id: "agent-1", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.success).toBe(true)
+    //#then
+    expect(result).toContain("✓")
+    expect(result).toContain("Resumed task #1")
   })
 
   //#given agent has active task
   //#when resuming another task
   //#then fail with agent_busy
   it("returns agent_busy if has active task", async () => {
-    // given
+    //#given
     const taskDir = join(TEST_DIR, "tasks")
     writeFileSync(
       join(taskDir, "1.json"),
@@ -67,12 +69,12 @@ describe("TaskResume Tool", () => {
       })
     )
 
-    // when
-    const result = await taskResumeTool.execute({ taskId: "2", agentId: "agent-1" }, { taskDir })
+    //#when
+    const result = await taskResumeTool.execute({ task_id: "2", agent_id: "agent-1", task_dir: taskDir }, mockContext)
 
-    // then
-    expect(result.success).toBe(false)
-    expect(result.reason).toBe("agent_busy")
-    expect(result.busyWithTasks).toContain("1")
+    //#then
+    expect(result).toContain("✗")
+    expect(result).toContain("Agent busy")
+    expect(result).toContain("#1")
   })
 })

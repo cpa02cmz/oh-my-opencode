@@ -4,6 +4,7 @@ import { join } from "path"
 import { teammateTool } from "./teammate-tool"
 
 const TEST_DIR = join(import.meta.dirname, ".test-teammate")
+const mockContext = {} as Parameters<typeof teammateTool.execute>[1]
 
 describe("TeammateTool", () => {
   beforeEach(() => {
@@ -22,12 +23,15 @@ describe("TeammateTool", () => {
         name: "worker-1",
         team_name: "test-team",
         mode: "default",
+        team_dir: teamDir,
+        dry_run: true,
       },
-      { teamDir, dryRun: true }
+      mockContext
     )
 
-    expect(result.success).toBe(true)
-    expect(result.teammate?.name).toBe("worker-1")
+    expect(result).toContain("✓")
+    expect(result).toContain("worker-1")
+    expect(result).toContain("spawned")
   })
 
   //#given default params
@@ -38,11 +42,13 @@ describe("TeammateTool", () => {
     const result = await teammateTool.execute(
       {
         team_name: "test-team",
+        team_dir: teamDir,
+        dry_run: true,
       },
-      { teamDir, dryRun: true }
+      mockContext
     )
 
-    expect(result.success).toBe(true)
-    expect(result.teammate?.name).toBeDefined()
+    expect(result).toContain("✓")
+    expect(result).toContain("spawned")
   })
 })

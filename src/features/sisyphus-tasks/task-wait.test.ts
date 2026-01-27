@@ -4,6 +4,7 @@ import { join } from "path"
 import { taskWaitTool } from "./task-wait"
 
 const TEST_DIR = join(import.meta.dirname, ".test-task-wait")
+const mockContext = {} as Parameters<typeof taskWaitTool.execute>[1]
 
 describe("TaskWait Tool", () => {
   beforeEach(() => {
@@ -21,9 +22,9 @@ describe("TaskWait Tool", () => {
       id: "1", subject: "A", description: "D", status: "completed", blocks: [], blockedBy: []
     }))
     
-    const result = await taskWaitTool.execute({ taskId: "1", timeout: 1000 }, { taskDir })
-    expect(result.completed).toBe(true)
-    expect(result.task?.status).toBe("completed")
+    const result = await taskWaitTool.execute({ task_id: "1", timeout: 1000, task_dir: taskDir }, mockContext)
+    expect(result).toContain("✓")
+    expect(result).toContain("Task #1 completed")
   })
 
   //#given pending task
@@ -35,8 +36,7 @@ describe("TaskWait Tool", () => {
       id: "1", subject: "A", description: "D", status: "pending", blocks: [], blockedBy: []
     }))
     
-    const result = await taskWaitTool.execute({ taskId: "1", timeout: 100 }, { taskDir })
-    expect(result.completed).toBe(false)
-    expect(result.task?.status).toBe("pending")
+    const result = await taskWaitTool.execute({ task_id: "1", timeout: 100, task_dir: taskDir }, mockContext)
+    expect(result).toContain("pending")
   })
 })

@@ -3,6 +3,7 @@ import { join } from "path"
 import { readdirSync } from "fs"
 import { readJsonSafe, writeJsonAtomic } from "./storage"
 import { TaskSchema } from "./types"
+import { formatTaskResume } from "./formatters"
 
 export const taskResumeTool: ToolDefinition = tool({
   description: "Resume a task (checks if agent is busy)",
@@ -23,29 +24,29 @@ export const taskResumeTool: ToolDefinition = tool({
       }
     }
     if (busyTasks.length > 0) {
-      return JSON.stringify({ success: false, reason: "agent_busy", busyWithTasks: busyTasks })
+      return formatTaskResume({ success: false, reason: "agent_busy", busyWithTasks: busyTasks })
     }
 
     const taskPath = join(taskDir, `${args.task_id}.json`)
     const task = readJsonSafe(taskPath, TaskSchema)
 
-    if (!task) return JSON.stringify({ success: false, reason: "task_not_found" })
+    if (!task) return formatTaskResume({ success: false, reason: "task_not_found" })
     if (task.owner && task.owner !== args.agent_id && task.status === "in_progress") {
-      return JSON.stringify({ success: false, reason: "already_claimed", task })
+      return formatTaskResume({ success: false, reason: "already_claimed", task })
     }
-    if (task.status === "completed") return JSON.stringify({ success: false, reason: "already_resolved", task })
+    if (task.status === "completed") return formatTaskResume({ success: false, reason: "already_resolved", task })
 
     const blockers: string[] = []
     for (const blockerId of task.blockedBy) {
       const blocker = readJsonSafe(join(taskDir, `${blockerId}.json`), TaskSchema)
       if (blocker && blocker.status !== "completed") blockers.push(blockerId)
     }
-    if (blockers.length > 0) return JSON.stringify({ success: false, reason: "blocked", task, blockedByTasks: blockers })
+    if (blockers.length > 0) return formatTaskResume({ success: false, reason: "blocked", task, blockedByTasks: blockers })
 
     task.owner = args.agent_id
     task.status = "in_progress"
     writeJsonAtomic(taskPath, task)
 
-    return JSON.stringify({ success: true, task })
+    return formatTaskResume({ success: true, task })
   },
 })

@@ -3,6 +3,7 @@ import { readdirSync } from "fs"
 import { join } from "path"
 import { writeJsonAtomic, ensureDir } from "../../features/sisyphus-tasks/storage"
 import type { Task } from "../../features/sisyphus-tasks/types"
+import { formatTaskCreate } from "../../features/sisyphus-tasks/formatters"
 
 export const taskCreateTool: ToolDefinition = tool({
   description: "Create a new task",
@@ -36,6 +37,6 @@ export const taskCreateTool: ToolDefinition = tool({
 
     writeJsonAtomic(join(taskDir, `${nextId}.json`), task)
 
-    return JSON.stringify({ task: { id: task.id, subject: task.subject } })
+    return formatTaskCreate({ id: task.id, subject: task.subject })
   }
 })

@@ -2,6 +2,7 @@ import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { ensureDir, writeJsonAtomic } from "../../features/sisyphus-tasks/storage"
 import type { MailboxMessage } from "../../features/sisyphus-swarm/mailbox/types"
+import { formatTeammate } from "../../features/sisyphus-tasks/formatters"
 
 export const teammateTool: ToolDefinition = tool({
   description: "Spawn a new teammate agent",
@@ -37,7 +38,7 @@ export const teammateTool: ToolDefinition = tool({
       // delegate_task integration goes here
     }
 
-    return JSON.stringify({
+    return formatTeammate({
       success: true,
       teammate: { name: teammateName, team: teamName, mode },
     })

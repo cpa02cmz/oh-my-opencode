@@ -11,6 +11,8 @@ import { taskExecuteTool } from "./task-execute"
 import { taskSuspendTool } from "../../tools/sisyphus-tasks/task-suspend"
 import { taskAbortTool } from "../../tools/sisyphus-tasks/task-abort"
 
+const mockContext = {} as Parameters<typeof taskCreateTool.execute>[1]
+
 describe("Sisyphus Tasks E2E", () => {
   let taskDir: string
 
@@ -24,160 +26,160 @@ describe("Sisyphus Tasks E2E", () => {
 
   //#region E2E: Full task lifecycle
   it("should complete full task lifecycle: create -> execute -> update -> complete", async () => {
-    //#given
-    const context = { taskDir }
+    //#given - tools use task_dir arg
 
     //#when: create a task
     const createResult = await taskCreateTool.execute(
-      { subject: "Implement feature X", description: "Build the feature" },
-      context
+      { subject: "Implement feature X", description: "Build the feature", task_dir: taskDir },
+      mockContext
     )
 
     //#then
-    expect(createResult.task.id).toBe("1")
-    expect(createResult.task.subject).toBe("Implement feature X")
+    expect(createResult).toContain("Task #1 created")
+    expect(createResult).toContain("Implement feature X")
 
     //#when: list tasks
-    const listResult = await taskListTool.execute({}, context)
+    const listResult = await taskListTool.execute({ task_dir: taskDir }, mockContext)
 
     //#then
-    expect(listResult).toContain("#1 [pending] Implement feature X")
+    expect(listResult).toContain("#1")
+    expect(listResult).toContain("Implement feature X")
 
     //#when: execute (claim) the task
     const executeResult = await taskExecuteTool.execute(
-      { taskId: "1", agentId: "agent-001" },
-      context
+      { task_id: "1", agent_id: "agent-001", task_dir: taskDir },
+      mockContext
     )
 
     //#then
-    expect(executeResult.success).toBe(true)
-    expect(executeResult.task?.status).toBe("in_progress")
-    expect(executeResult.task?.owner).toBe("agent-001")
+    expect(executeResult).toContain("✓")
+    expect(executeResult).toContain("Claimed task #1")
+    expect(executeResult).toContain("in_progress")
+    expect(executeResult).toContain("@agent-001")
 
     //#when: update task to completed
     const updateResult = await taskUpdateTool.execute(
-      { taskId: "1", status: "completed" },
-      context
+      { task_id: "1", status: "completed", task_dir: taskDir },
+      mockContext
     )
 
     //#then
-    expect(updateResult.success).toBe(true)
-    expect(updateResult.updatedFields).toContain("status")
+    expect(updateResult).toContain("✓")
+    expect(updateResult).toContain("Task #1 updated")
+    expect(updateResult).toContain("status")
 
     //#when: get final task state
-    const getResult = await taskGetTool.execute({ taskId: "1" }, context)
+    const getResult = await taskGetTool.execute({ task_id: "1", task_dir: taskDir }, mockContext)
 
     //#then
-    expect(getResult.task?.status).toBe("completed")
-    expect(getResult.task?.owner).toBe("agent-001")
+    expect(getResult).toContain("Task #1")
+    expect(getResult).toContain("completed")
+    expect(getResult).toContain("@agent-001")
   })
   //#endregion
 
   //#region E2E: Task blocking and dependencies
   it("should handle task dependencies correctly", async () => {
     //#given
-    const context = { taskDir }
-    
     await taskCreateTool.execute(
-      { subject: "Task 1 - Foundation", description: "Base work" },
-      context
+      { subject: "Task 1 - Foundation", description: "Base work", task_dir: taskDir },
+      mockContext
     )
     await taskCreateTool.execute(
-      { subject: "Task 2 - Dependent", description: "Depends on task 1" },
-      context
+      { subject: "Task 2 - Dependent", description: "Depends on task 1", task_dir: taskDir },
+      mockContext
     )
 
     //#when: add dependency
     await taskUpdateTool.execute(
-      { taskId: "2", addBlockedBy: ["1"] },
-      context
+      { task_id: "2", add_blocked_by: JSON.stringify(["1"]), task_dir: taskDir },
+      mockContext
     )
 
     //#then: task 2 cannot be executed
     const executeResult = await taskExecuteTool.execute(
-      { taskId: "2", agentId: "agent-001" },
-      context
+      { task_id: "2", agent_id: "agent-001", task_dir: taskDir },
+      mockContext
     )
-    expect(executeResult.success).toBe(false)
-    expect(executeResult.reason).toBe("blocked")
+    expect(executeResult).toContain("✗")
+    expect(executeResult).toContain("blocked")
 
     //#when: complete task 1
-    await taskExecuteTool.execute({ taskId: "1", agentId: "agent-001" }, context)
-    await taskUpdateTool.execute({ taskId: "1", status: "completed" }, context)
+    await taskExecuteTool.execute({ task_id: "1", agent_id: "agent-001", task_dir: taskDir }, mockContext)
+    await taskUpdateTool.execute({ task_id: "1", status: "completed", task_dir: taskDir }, mockContext)
 
     //#then: task 2 can now be executed
     const executeResult2 = await taskExecuteTool.execute(
-      { taskId: "2", agentId: "agent-002" },
-      context
+      { task_id: "2", agent_id: "agent-002", task_dir: taskDir },
+      mockContext
     )
-    expect(executeResult2.success).toBe(true)
+    expect(executeResult2).toContain("✓")
+    expect(executeResult2).toContain("Claimed task #2")
   })
   //#endregion
 
   //#region E2E: Task abort and cleanup
   it("should abort task and clean up dependencies", async () => {
     //#given
-    const context = { taskDir }
-    
     await taskCreateTool.execute(
-      { subject: "Task 1", description: "Will be aborted" },
-      context
+      { subject: "Task 1", description: "Will be aborted", task_dir: taskDir },
+      mockContext
     )
     await taskCreateTool.execute(
-      { subject: "Task 2", description: "Blocked by task 1" },
-      context
+      { subject: "Task 2", description: "Depends on task 1", task_dir: taskDir },
+      mockContext
     )
     await taskUpdateTool.execute(
-      { taskId: "2", addBlockedBy: ["1"] },
-      context
+      { task_id: "2", add_blocked_by: JSON.stringify(["1"]), task_dir: taskDir },
+      mockContext
     )
 
     //#when: abort task 1
-    await taskAbortTool.execute({ taskId: "1" }, context)
+    await taskAbortTool.execute({ task_id: "1", task_dir: taskDir }, mockContext)
 
     //#then: task 1 is deleted
-    const getResult = await taskGetTool.execute({ taskId: "1" }, context)
-    expect(getResult.task).toBeNull()
+    const getResult = await taskGetTool.execute({ task_id: "1", task_dir: taskDir }, mockContext)
+    expect(getResult).toContain("Task not found")
 
-    //#then: task 2 no longer blocked
-    const task2 = await taskGetTool.execute({ taskId: "2" }, context)
-    expect(task2.task?.blockedBy.includes("1")).toBe(false)
+    //#then: task 2 no longer blocked (check for "Blocked by | #" pattern in table)
+    const task2Result = await taskGetTool.execute({ task_id: "2", task_dir: taskDir }, mockContext)
+    expect(task2Result).toContain("Task #2")
+    expect(task2Result.includes("| Blocked by |")).toBe(false)
   })
   //#endregion
 
   //#region E2E: Task suspend and resume
   it("should suspend and allow re-execution of task", async () => {
     //#given
-    const context = { taskDir }
-    
     await taskCreateTool.execute(
-      { subject: "Task 1", description: "In progress" },
-      context
+      { subject: "Task 1", description: "In progress", task_dir: taskDir },
+      mockContext
     )
-    await taskExecuteTool.execute({ taskId: "1", agentId: "agent-001" }, context)
+    await taskExecuteTool.execute({ task_id: "1", agent_id: "agent-001", task_dir: taskDir }, mockContext)
 
     //#when: suspend the task
-    const suspendResult = await taskSuspendTool.execute({ taskId: "1" }, context)
+    const suspendResult = await taskSuspendTool.execute({ task_id: "1", task_dir: taskDir }, mockContext)
 
     //#then
-    expect(suspendResult.success).toBe(true)
+    expect(suspendResult).toContain("✓")
+    expect(suspendResult).toContain("suspended")
 
     //#when: verify task state
-    const taskAfterSuspend = await taskGetTool.execute({ taskId: "1" }, context)
+    const taskAfterSuspend = await taskGetTool.execute({ task_id: "1", task_dir: taskDir }, mockContext)
 
     //#then: task is pending and owner is cleared
-    expect(taskAfterSuspend.task?.status).toBe("pending")
-    expect(taskAfterSuspend.task?.owner).toBeUndefined()
+    expect(taskAfterSuspend).toContain("pending")
+    expect(taskAfterSuspend.includes("@agent-001")).toBe(false)
 
     //#when: another agent executes the task
     const executeResult = await taskExecuteTool.execute(
-      { taskId: "1", agentId: "agent-002" },
-      context
+      { task_id: "1", agent_id: "agent-002", task_dir: taskDir },
+      mockContext
     )
 
     //#then: new agent can claim the task
-    expect(executeResult.success).toBe(true)
-    expect(executeResult.task?.owner).toBe("agent-002")
+    expect(executeResult).toContain("✓")
+    expect(executeResult).toContain("@agent-002")
   })
   //#endregion
 })

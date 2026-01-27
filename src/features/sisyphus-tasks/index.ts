@@ -1,4 +1,4 @@
-export { taskExecuteTool, type TaskExecuteInput, type TaskExecuteContext, type TaskExecuteResult, type TaskExecuteFailReason } from "./task-execute"
+export { taskExecuteTool, type TaskExecuteFailReason } from "./task-execute"
 export { taskGetTool } from "./task-get"
 export { taskResumeTool } from "./task-resume"
 export { taskWaitTool } from "./task-wait"

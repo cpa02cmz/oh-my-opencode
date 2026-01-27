@@ -394,11 +394,11 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     task_resume: taskResumeTool,
     task_suspend: taskSuspendTool,
     task_wait: taskWaitTool,
-  } : {}
+  } as Record<string, typeof taskListTool> : {}
 
   const sisyphusSwarmTools = sisyphusSwarmEnabled ? {
     teammate: teammateTool,
-  } : {}
+  } as Record<string, typeof teammateTool> : {}
 
   return {
     tool: {

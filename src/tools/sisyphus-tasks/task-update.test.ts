@@ -4,6 +4,7 @@ import { join } from "path"
 import { taskUpdateTool } from "./task-update"
 
 const TEST_DIR = join(import.meta.dirname, ".test-task-update")
+const mockContext = {} as Parameters<typeof taskUpdateTool.execute>[1]
 
 describe("TaskUpdate Tool", () => {
   beforeEach(() => {
@@ -29,13 +30,14 @@ describe("TaskUpdate Tool", () => {
       })
     )
 
-    const result = await taskUpdateTool.execute({ taskId: "1", subject: "New" }, { taskDir })
-    expect(result.success).toBe(true)
-    expect(result.updatedFields).toContain("subject")
+    const result = await taskUpdateTool.execute({ task_id: "1", subject: "New", task_dir: taskDir }, mockContext)
+    expect(result).toContain("✓")
+    expect(result).toContain("Task #1 updated")
+    expect(result).toContain("subject")
 
     const saved = JSON.parse(readFileSync(join(taskDir, "1.json"), "utf-8"))
     expect(saved.subject).toBe("New")
-    expect(saved.description).toBe("Desc") // unchanged
+    expect(saved.description).toBe("Desc")
   })
 
   //#given task
@@ -66,7 +68,7 @@ describe("TaskUpdate Tool", () => {
       })
     )
 
-    await taskUpdateTool.execute({ taskId: "2", addBlockedBy: ["1"] }, { taskDir })
+    await taskUpdateTool.execute({ task_id: "2", add_blocked_by: JSON.stringify(["1"]), task_dir: taskDir }, mockContext)
 
     const task1 = JSON.parse(readFileSync(join(taskDir, "1.json"), "utf-8"))
     const task2 = JSON.parse(readFileSync(join(taskDir, "2.json"), "utf-8"))
@@ -91,7 +93,7 @@ describe("TaskUpdate Tool", () => {
       })
     )
 
-    await taskUpdateTool.execute({ taskId: "1", status: "deleted" }, { taskDir })
+    await taskUpdateTool.execute({ task_id: "1", status: "deleted", task_dir: taskDir }, mockContext)
     expect(existsSync(join(taskDir, "1.json"))).toBe(false)
   })
 })

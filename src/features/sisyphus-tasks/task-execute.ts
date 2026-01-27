@@ -2,6 +2,7 @@ import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { readJsonSafe, writeJsonAtomic } from "./storage"
 import { TaskSchema } from "./types"
+import { formatTaskExecute } from "./formatters"
 
 export type TaskExecuteFailReason = "task_not_found" | "already_claimed" | "already_resolved" | "blocked"
 
@@ -18,15 +19,15 @@ export const taskExecuteTool: ToolDefinition = tool({
     const task = readJsonSafe(taskPath, TaskSchema)
 
     if (!task) {
-      return JSON.stringify({ success: false, reason: "task_not_found" })
+      return formatTaskExecute({ success: false, reason: "task_not_found" })
     }
 
     if (task.owner && task.status === "in_progress") {
-      return JSON.stringify({ success: false, reason: "already_claimed", task })
+      return formatTaskExecute({ success: false, reason: "already_claimed", task })
     }
 
     if (task.status === "completed") {
-      return JSON.stringify({ success: false, reason: "already_resolved", task })
+      return formatTaskExecute({ success: false, reason: "already_resolved", task })
     }
 
     const blockers: string[] = []
@@ -38,13 +39,13 @@ export const taskExecuteTool: ToolDefinition = tool({
     }
 
     if (blockers.length > 0) {
-      return JSON.stringify({ success: false, reason: "blocked", task, blockedByTasks: blockers })
+      return formatTaskExecute({ success: false, reason: "blocked", task, blockedByTasks: blockers })
     }
 
     task.owner = args.agent_id
     task.status = "in_progress"
     writeJsonAtomic(taskPath, task)
 
-    return JSON.stringify({ success: true, task })
+    return formatTaskExecute({ success: true, task })
   },
 })

@@ -2,6 +2,7 @@ import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { readJsonSafe, writeJsonAtomic } from "../../features/sisyphus-tasks/storage"
 import { TaskSchema } from "../../features/sisyphus-tasks/types"
+import { formatTaskSuspend } from "../../features/sisyphus-tasks/formatters"
 
 export const taskSuspendTool: ToolDefinition = tool({
   description: "Suspend a task",
@@ -14,12 +15,12 @@ export const taskSuspendTool: ToolDefinition = tool({
     const taskPath = join(taskDir, `${args.task_id}.json`)
     const task = readJsonSafe(taskPath, TaskSchema)
 
-    if (!task) return JSON.stringify({ success: false })
+    if (!task) return formatTaskSuspend({ success: false })
 
     task.status = "pending"
     task.owner = undefined
     writeJsonAtomic(taskPath, task)
 
-    return JSON.stringify({ success: true })
+    return formatTaskSuspend({ success: true, taskId: args.task_id })
   }
 })

@@ -2,6 +2,7 @@ import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { readJsonSafe } from "./storage"
 import { TaskSchema } from "./types"
+import { formatTaskGet } from "./formatters"
 
 export const taskGetTool: ToolDefinition = tool({
   description: "Get a task by ID",
@@ -12,6 +13,6 @@ export const taskGetTool: ToolDefinition = tool({
   execute: async (args) => {
     const taskDir = args.task_dir ?? process.cwd()
     const task = readJsonSafe(join(taskDir, `${args.task_id}.json`), TaskSchema)
-    return JSON.stringify({ task })
+    return formatTaskGet(task)
   },
 })
