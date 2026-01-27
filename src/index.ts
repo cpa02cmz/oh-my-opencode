@@ -72,15 +72,7 @@ import {
   interactive_bash,
   startTmuxCheck,
   lspManager,
-  taskListTool,
-  taskCreateTool,
-  taskAbortTool,
-  taskRemoveTool,
-  taskUpdateTool,
-  taskSuspendTool,
-  taskGetTool,
-  taskResumeTool,
-  taskWaitTool,
+  taskTool,
   createTeammateTool,
   sendMessageTool,
 } from "./tools";
@@ -380,16 +372,8 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
   const sisyphusSwarmEnabled = pluginConfig.sisyphus?.swarm?.enabled ?? false
 
   const sisyphusTaskTools = sisyphusTasksEnabled ? {
-    task_list: taskListTool,
-    task_create: taskCreateTool,
-    task_get: taskGetTool,
-    task_update: taskUpdateTool,
-    task_abort: taskAbortTool,
-    task_remove: taskRemoveTool,
-    task_resume: taskResumeTool,
-    task_suspend: taskSuspendTool,
-    task_wait: taskWaitTool,
-  } as Record<string, typeof taskListTool> : {}
+    task_tool: taskTool,
+  } as Record<string, ToolDefinition> : {}
 
   const swarmConfig = pluginConfig.sisyphus?.swarm
   const swarmManager = sisyphusSwarmEnabled && swarmConfig
