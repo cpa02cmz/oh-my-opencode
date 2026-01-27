@@ -1,4 +1,6 @@
 import { randomUUID } from "crypto"
+import { getUnreadMessages, markAsRead } from "../mailbox/mailbox"
+import { PermissionResponseSchema } from "../mailbox/types"
 import type { PermissionRequest, PermissionResponse } from "../mailbox/types"
 
 interface PermissionCallback {
@@ -57,12 +59,29 @@ export function startPolling(
 ): { stop: () => void } {
   let running = true
 
-  void agentName
-  void teamDir
-  void onMessage
-
   const poll = async (): Promise<void> => {
     while (running) {
+      const unread = getUnreadMessages(agentName, teamDir)
+
+      for (const message of unread) {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(message.text)
+        } catch {
+          continue
+        }
+
+        const result = PermissionResponseSchema.safeParse(parsed)
+        if (!result.success) continue
+
+        processResponse(result.data)
+        onMessage?.(result.data)
+      }
+
+      if (unread.length > 0) {
+        markAsRead(agentName, teamDir)
+      }
+
       await new Promise<void>((resolve) => {
         setTimeout(resolve, interval)
       })
