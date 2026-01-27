@@ -2,7 +2,7 @@ import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { sendMessage } from "../../features/sisyphus-swarm/mailbox/mailbox"
 import type { ProtocolMessage } from "../../features/sisyphus-swarm/mailbox/types"
-import { formatSendMessage } from "../../features/sisyphus-tasks/formatters"
+import { formatSendMessage } from "../../features/sisyphus-swarm/formatters"
 
 export const sendMessageTool: ToolDefinition = tool({
   description: "Send a message to another agent via mailbox IPC",
