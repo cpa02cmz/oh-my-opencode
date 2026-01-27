@@ -10,6 +10,7 @@ import {
   ensureDir,
   readJsonSafe,
   writeJsonAtomic,
+  acquireLock,
 } from "./storage"
 
 const TEST_DIR = join(import.meta.dirname, ".test-storage")
@@ -151,28 +152,106 @@ describe("Storage Utilities", () => {
     })
   })
 
-  describe("writeJsonAtomic", () => {
-    //#given data to write
-    //#when calling writeJsonAtomic
-    //#then it should write to file atomically
-    it("writes JSON atomically", () => {
-      const filePath = join(TEST_DIR, "atomic.json")
-      const data = { key: "value", number: 123 }
+   describe("writeJsonAtomic", () => {
+     //#given data to write
+     //#when calling writeJsonAtomic
+     //#then it should write to file atomically
+     it("writes JSON atomically", () => {
+       const filePath = join(TEST_DIR, "atomic.json")
+       const data = { key: "value", number: 123 }
 
-      writeJsonAtomic(filePath, data)
+       writeJsonAtomic(filePath, data)
 
-      const content = readFileSync(filePath, "utf-8")
-      expect(JSON.parse(content)).toEqual(data)
-    })
+       const content = readFileSync(filePath, "utf-8")
+       expect(JSON.parse(content)).toEqual(data)
+     })
 
-    //#given a deeply nested path
-    //#when calling writeJsonAtomic
-    //#then it should create parent directories
-    it("creates parent directories", () => {
-      const filePath = join(TEST_DIR, "deep", "nested", "file.json")
-      writeJsonAtomic(filePath, { test: true })
+     //#given a deeply nested path
+     //#when calling writeJsonAtomic
+     //#then it should create parent directories
+     it("creates parent directories", () => {
+       const filePath = join(TEST_DIR, "deep", "nested", "file.json")
+       writeJsonAtomic(filePath, { test: true })
 
-      expect(existsSync(filePath)).toBe(true)
-    })
-  })
+       expect(existsSync(filePath)).toBe(true)
+     })
+   })
+
+   describe("acquireLock", () => {
+     //#given a directory path with no existing lock
+     //#when calling acquireLock
+     //#then it should create .lock file and return acquired=true with release function
+     it("acquires lock when no lock exists", () => {
+       const dirPath = join(TEST_DIR, "lock-test-1")
+       mkdirSync(dirPath, { recursive: true })
+
+       const result = acquireLock(dirPath)
+
+       expect(result.acquired).toBe(true)
+       expect(typeof result.release).toBe("function")
+       expect(existsSync(join(dirPath, ".lock"))).toBe(true)
+     })
+
+     //#given a directory with a fresh lock file
+     //#when calling acquireLock
+     //#then it should return acquired=false and not create new lock
+     it("returns acquired=false when fresh lock exists", () => {
+       const dirPath = join(TEST_DIR, "lock-test-2")
+       mkdirSync(dirPath, { recursive: true })
+       const lockPath = join(dirPath, ".lock")
+       writeFileSync(lockPath, JSON.stringify({ timestamp: Date.now() }))
+
+       const result = acquireLock(dirPath)
+
+       expect(result.acquired).toBe(false)
+     })
+
+     //#given a lock file that is older than 30 seconds
+     //#when calling acquireLock
+     //#then it should override the stale lock and return acquired=true
+     it("overrides stale lock (>30s old)", () => {
+       const dirPath = join(TEST_DIR, "lock-test-3")
+       mkdirSync(dirPath, { recursive: true })
+       const lockPath = join(dirPath, ".lock")
+       const staleTimestamp = Date.now() - 31000 // 31 seconds ago
+       writeFileSync(lockPath, JSON.stringify({ timestamp: staleTimestamp }))
+
+       const result = acquireLock(dirPath)
+
+       expect(result.acquired).toBe(true)
+       const lockContent = JSON.parse(readFileSync(lockPath, "utf-8"))
+       expect(lockContent.timestamp).toBeGreaterThan(staleTimestamp)
+     })
+
+     //#given an acquired lock with release function
+     //#when calling release()
+     //#then it should remove the .lock file
+     it("release() removes lock file", () => {
+       const dirPath = join(TEST_DIR, "lock-test-4")
+       mkdirSync(dirPath, { recursive: true })
+
+       const { acquired, release } = acquireLock(dirPath)
+       expect(acquired).toBe(true)
+       expect(existsSync(join(dirPath, ".lock"))).toBe(true)
+
+       release()
+
+       expect(existsSync(join(dirPath, ".lock"))).toBe(false)
+     })
+
+     //#given a lock that is exactly 30 seconds old
+     //#when calling acquireLock
+     //#then it should still be considered fresh (not stale)
+     it("considers 30s lock as fresh (boundary)", () => {
+       const dirPath = join(TEST_DIR, "lock-test-5")
+       mkdirSync(dirPath, { recursive: true })
+       const lockPath = join(dirPath, ".lock")
+       const boundaryTimestamp = Date.now() - 30000 // exactly 30 seconds ago
+       writeFileSync(lockPath, JSON.stringify({ timestamp: boundaryTimestamp }))
+
+       const result = acquireLock(dirPath)
+
+       expect(result.acquired).toBe(false)
+     })
+   })
 })

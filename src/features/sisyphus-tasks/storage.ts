@@ -80,3 +80,45 @@ export function writeJsonAtomic(filePath: string, data: unknown): void {
     throw error
   }
 }
+
+const STALE_LOCK_THRESHOLD_MS = 30000
+
+export function acquireLock(dirPath: string): { acquired: boolean; release: () => void } {
+  const lockPath = join(dirPath, ".lock")
+  const now = Date.now()
+
+  if (existsSync(lockPath)) {
+    try {
+      const lockContent = readFileSync(lockPath, "utf-8")
+      const lockData = JSON.parse(lockContent)
+      const lockAge = now - lockData.timestamp
+
+      if (lockAge <= STALE_LOCK_THRESHOLD_MS) {
+        return {
+          acquired: false,
+          release: () => {
+            // No-op release for failed acquisition
+          },
+        }
+      }
+    } catch {
+      // If lock file is corrupted, treat as stale and override
+    }
+  }
+
+  ensureDir(dirPath)
+  writeFileSync(lockPath, JSON.stringify({ timestamp: now }), "utf-8")
+
+  return {
+    acquired: true,
+    release: () => {
+      try {
+        if (existsSync(lockPath)) {
+          unlinkSync(lockPath)
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    },
+  }
+}
