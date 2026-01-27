@@ -310,7 +310,7 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
         ? { 
             ...agentConfig["prometheus"],
             name: "plan", 
-            mode: "subagent" as const 
+            mode: "all" as const 
           }
         : undefined;
 
