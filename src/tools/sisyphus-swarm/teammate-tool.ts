@@ -1,39 +1,22 @@
+import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { ensureDir, writeJsonAtomic } from "../../features/sisyphus-tasks/storage"
 import type { MailboxMessage } from "../../features/sisyphus-swarm/mailbox/types"
 
-export interface TeammateInput {
-  name?: string
-  team_name?: string
-  mode?: "acceptEdits" | "bypassPermissions" | "default" | "delegate" | "dontAsk" | "plan"
-}
-
-export interface TeammateContext {
-  teamDir?: string
-  dryRun?: boolean
-}
-
-export const teammateTool = {
-  name: "TeammateTool",
+export const teammateTool: ToolDefinition = tool({
   description: "Spawn a new teammate agent",
-  inputSchema: {
-    name: { type: "string", optional: true, description: "Teammate name" },
-    team_name: { type: "string", optional: true, description: "Team name" },
-    mode: { type: "string", optional: true, description: "Permission mode" },
+  args: {
+    name: tool.schema.string().optional().describe("Teammate name"),
+    team_name: tool.schema.string().optional().describe("Team name"),
+    mode: tool.schema.enum(["acceptEdits", "bypassPermissions", "default", "delegate", "dontAsk", "plan"]).optional().describe("Permission mode"),
+    team_dir: tool.schema.string().optional().describe("Team directory (defaults to .sisyphus/teams/{team_name})"),
+    dry_run: tool.schema.boolean().optional().describe("If true, skip delegate_task integration"),
   },
-
-  async execute(
-    input: TeammateInput,
-    context?: TeammateContext
-  ): Promise<{
-    success: boolean
-    teammate?: { name: string; team: string; mode: string }
-    error?: string
-  }> {
-    const teamName = input.team_name ?? "default-team"
-    const teammateName = input.name ?? `teammate-${Date.now()}`
-    const mode = input.mode ?? "default"
-    const teamDir = context?.teamDir ?? join(process.cwd(), ".sisyphus", "teams", teamName)
+  execute: async (args) => {
+    const teamName = args.team_name ?? "default-team"
+    const teammateName = args.name ?? `teammate-${Date.now()}`
+    const mode = args.mode ?? "default"
+    const teamDir = args.team_dir ?? join(process.cwd(), ".sisyphus", "teams", teamName)
 
     const inboxesDir = join(teamDir, "inboxes")
     ensureDir(inboxesDir)
@@ -50,13 +33,13 @@ export const teammateTool = {
     }
     writeJsonAtomic(configPath, config)
 
-    if (!context?.dryRun) {
+    if (!args.dry_run) {
       // delegate_task integration goes here
     }
 
-    return {
+    return JSON.stringify({
       success: true,
       teammate: { name: teammateName, team: teamName, mode },
-    }
+    })
   },
-}
+})

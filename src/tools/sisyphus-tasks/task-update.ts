@@ -1,91 +1,86 @@
+import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { unlinkSync } from "fs"
 import { readJsonSafe, writeJsonAtomic } from "../../features/sisyphus-tasks/storage"
-import { TaskSchema, type Task, type TaskUpdateInput } from "../../features/sisyphus-tasks/types"
+import { TaskSchema, type Task } from "../../features/sisyphus-tasks/types"
 
-export const taskUpdateTool = {
-  name: "TaskUpdate",
+export const taskUpdateTool: ToolDefinition = tool({
   description: "Update a task",
-  inputSchema: {
-    taskId: { type: "string" },
-    subject: { type: "string", optional: true },
-    description: { type: "string", optional: true },
-    status: { type: "string", optional: true },
-    addBlocks: { type: "array", optional: true },
-    addBlockedBy: { type: "array", optional: true },
-    owner: { type: "string", optional: true },
-    metadata: { type: "object", optional: true },
+  args: {
+    task_id: tool.schema.string().describe("Task ID to update"),
+    subject: tool.schema.string().optional().describe("New task title"),
+    description: tool.schema.string().optional().describe("New task description"),
+    status: tool.schema.string().optional().describe("New status (pending, in_progress, completed, deleted)"),
+    add_blocks: tool.schema.string().optional().describe("JSON array of task IDs this task blocks"),
+    add_blocked_by: tool.schema.string().optional().describe("JSON array of task IDs that block this task"),
+    owner: tool.schema.string().optional().describe("New owner"),
+    metadata: tool.schema.string().optional().describe("JSON metadata object to merge"),
+    task_dir: tool.schema.string().optional().describe("Task directory (defaults to current working directory)"),
   },
-
-  async execute(
-    input: TaskUpdateInput,
-    context?: { taskDir?: string }
-  ): Promise<{
-    success: boolean
-    taskId: string
-    updatedFields: string[]
-    error?: string
-  }> {
-    const taskDir = context?.taskDir ?? process.cwd()
-    const taskPath = join(taskDir, `${input.taskId}.json`)
+  execute: async (args) => {
+    const taskDir = args.task_dir ?? process.cwd()
+    const taskPath = join(taskDir, `${args.task_id}.json`)
     const task = readJsonSafe(taskPath, TaskSchema)
 
     if (!task) {
-      return { success: false, taskId: input.taskId, updatedFields: [], error: "task_not_found" }
+      return JSON.stringify({ success: false, taskId: args.task_id, updatedFields: [], error: "task_not_found" })
     }
 
-    if (input.status === "deleted") {
+    if (args.status === "deleted") {
       unlinkSync(taskPath)
-      return { success: true, taskId: input.taskId, updatedFields: ["deleted"] }
+      return JSON.stringify({ success: true, taskId: args.task_id, updatedFields: ["deleted"] })
     }
 
     const updatedFields: string[] = []
 
-    if (input.subject !== undefined) {
-      task.subject = input.subject
+    if (args.subject !== undefined) {
+      task.subject = args.subject
       updatedFields.push("subject")
     }
-    if (input.description !== undefined) {
-      task.description = input.description
+    if (args.description !== undefined) {
+      task.description = args.description
       updatedFields.push("description")
     }
-    if (input.status !== undefined) {
-      task.status = input.status as Task["status"]
+    if (args.status !== undefined) {
+      task.status = args.status as Task["status"]
       updatedFields.push("status")
     }
-    if (input.owner !== undefined) {
-      task.owner = input.owner
+    if (args.owner !== undefined) {
+      task.owner = args.owner
       updatedFields.push("owner")
     }
-    if (input.metadata !== undefined) {
-      task.metadata = { ...task.metadata, ...input.metadata }
+    if (args.metadata !== undefined) {
+      const metadata = JSON.parse(args.metadata)
+      task.metadata = { ...task.metadata, ...metadata }
       updatedFields.push("metadata")
     }
 
-    if (input.addBlockedBy?.length) {
-      for (const blockerId of input.addBlockedBy) {
+    const addBlockedBy = args.add_blocked_by ? JSON.parse(args.add_blocked_by) as string[] : []
+    if (addBlockedBy.length) {
+      for (const blockerId of addBlockedBy) {
         if (!task.blockedBy.includes(blockerId)) {
           task.blockedBy.push(blockerId)
         }
         const blockerPath = join(taskDir, `${blockerId}.json`)
         const blocker = readJsonSafe(blockerPath, TaskSchema)
-        if (blocker && !blocker.blocks.includes(input.taskId)) {
-          blocker.blocks.push(input.taskId)
+        if (blocker && !blocker.blocks.includes(args.task_id)) {
+          blocker.blocks.push(args.task_id)
           writeJsonAtomic(blockerPath, blocker)
         }
       }
       updatedFields.push("blockedBy")
     }
 
-    if (input.addBlocks?.length) {
-      for (const blockedId of input.addBlocks) {
+    const addBlocks = args.add_blocks ? JSON.parse(args.add_blocks) as string[] : []
+    if (addBlocks.length) {
+      for (const blockedId of addBlocks) {
         if (!task.blocks.includes(blockedId)) {
           task.blocks.push(blockedId)
         }
         const blockedPath = join(taskDir, `${blockedId}.json`)
         const blocked = readJsonSafe(blockedPath, TaskSchema)
-        if (blocked && !blocked.blockedBy.includes(input.taskId)) {
-          blocked.blockedBy.push(input.taskId)
+        if (blocked && !blocked.blockedBy.includes(args.task_id)) {
+          blocked.blockedBy.push(args.task_id)
           writeJsonAtomic(blockedPath, blocked)
         }
       }
@@ -93,6 +88,6 @@ export const taskUpdateTool = {
     }
 
     writeJsonAtomic(taskPath, task)
-    return { success: true, taskId: input.taskId, updatedFields }
+    return JSON.stringify({ success: true, taskId: args.task_id, updatedFields })
   },
-}
+})

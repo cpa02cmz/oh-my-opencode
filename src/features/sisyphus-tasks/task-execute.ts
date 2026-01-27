@@ -1,48 +1,32 @@
+import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 import { join } from "path"
 import { readJsonSafe, writeJsonAtomic } from "./storage"
-import { TaskSchema, type Task } from "./types"
-
-export interface TaskExecuteInput {
-  taskId: string
-  agentId: string
-}
-
-export interface TaskExecuteContext {
-  taskDir?: string
-}
+import { TaskSchema } from "./types"
 
 export type TaskExecuteFailReason = "task_not_found" | "already_claimed" | "already_resolved" | "blocked"
 
-export interface TaskExecuteResult {
-  success: boolean
-  reason?: TaskExecuteFailReason
-  task?: Task
-  blockedByTasks?: string[]
-}
-
-export const taskExecuteTool = {
-  name: "TaskExecute",
+export const taskExecuteTool: ToolDefinition = tool({
   description: "Execute/claim a task",
-  inputSchema: {
-    taskId: { type: "string" },
-    agentId: { type: "string" },
+  args: {
+    task_id: tool.schema.string().describe("Task ID to execute"),
+    agent_id: tool.schema.string().describe("Agent ID claiming the task"),
+    task_dir: tool.schema.string().optional().describe("Task directory (defaults to current working directory)"),
   },
-
-  async execute(input: TaskExecuteInput, context?: TaskExecuteContext): Promise<TaskExecuteResult> {
-    const taskDir = context?.taskDir ?? process.cwd()
-    const taskPath = join(taskDir, `${input.taskId}.json`)
+  execute: async (args) => {
+    const taskDir = args.task_dir ?? process.cwd()
+    const taskPath = join(taskDir, `${args.task_id}.json`)
     const task = readJsonSafe(taskPath, TaskSchema)
 
     if (!task) {
-      return { success: false, reason: "task_not_found" }
+      return JSON.stringify({ success: false, reason: "task_not_found" })
     }
 
     if (task.owner && task.status === "in_progress") {
-      return { success: false, reason: "already_claimed", task }
+      return JSON.stringify({ success: false, reason: "already_claimed", task })
     }
 
     if (task.status === "completed") {
-      return { success: false, reason: "already_resolved", task }
+      return JSON.stringify({ success: false, reason: "already_resolved", task })
     }
 
     const blockers: string[] = []
@@ -54,13 +38,13 @@ export const taskExecuteTool = {
     }
 
     if (blockers.length > 0) {
-      return { success: false, reason: "blocked", task, blockedByTasks: blockers }
+      return JSON.stringify({ success: false, reason: "blocked", task, blockedByTasks: blockers })
     }
 
-    task.owner = input.agentId
+    task.owner = args.agent_id
     task.status = "in_progress"
     writeJsonAtomic(taskPath, task)
 
-    return { success: true, task }
+    return JSON.stringify({ success: true, task })
   },
-}
+})
