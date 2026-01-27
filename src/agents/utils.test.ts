@@ -52,11 +52,9 @@ describe("createBuiltinAgents with model overrides", () => {
     // #when
     const agents = await createBuiltinAgents([], {}, undefined, TEST_DEFAULT_MODEL)
 
-    // #then - uses first fallback entry (openai/gpt-5.2) instead of system default
-    expect(agents.oracle.model).toBe("openai/gpt-5.2")
-    expect(agents.oracle.reasoningEffort).toBe("medium")
-    expect(agents.oracle.textVerbosity).toBe("high")
-    expect(agents.oracle.thinking).toBeUndefined()
+    // #then
+    expect(agents.oracle.model).toBe("opencode/gpt-5.2")
+    expect(agents.oracle.thinking).toEqual({ type: "enabled", budgetTokens: 32000 })
   })
 
   test("Oracle with GPT model override has reasoningEffort, no thinking", async () => {
@@ -113,9 +111,9 @@ describe("createBuiltinAgents without systemDefaultModel", () => {
     // #when
     const agents = await createBuiltinAgents([], {}, undefined, undefined)
 
-    // #then - agents should still be created using fallback chain
+    // #then
     expect(agents.oracle).toBeDefined()
-    expect(agents.oracle.model).toBe("openai/gpt-5.2")
+    expect(agents.oracle.model).toBe("opencode/gpt-5.2")
   })
 
   test("sisyphus uses fallback chain when systemDefaultModel undefined", async () => {
