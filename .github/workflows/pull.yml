@@ -1,0 +1,60 @@
+name: The Guardian (Pull Request)
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  guardian:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install OpenCode
+        run: npm install -g opencode
+
+      - name: Context Sync & Merge Attempt
+        id: sync
+        run: |
+          git fetch origin master
+          git merge origin/master --no-edit || echo "conflict=true" >> $GITHUB_OUTPUT
+
+      - name: Conflict Resolution (Self-Healing)
+        if: steps.sync.outputs.conflict == 'true'
+        env:
+          OPENCODE_KEY: ${{ secrets.OPENCODE_KEY }}
+        run: |
+          opencode run "Analyze conflict markers in this repo and force-push a resolution commit." --model opencode/big-pickle
+
+      - name: Review Handler
+        if: github.event_name == 'pull_request_target'
+        env:
+          OPENCODE_KEY: ${{ secrets.OPENCODE_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          opencode run "Check PR #$PR_NUMBER. If there are pending change requests, read comments, modify code, and resolve conversation." --model opencode/big-pickle
+
+      - name: Quality Gates
+        run: |
+          npm ci
+          npm run build --if-present
+          npm run lint --if-present
+          npm test --if-present
+
+      - name: Self-Healing Agent
+        if: failure()
+        env:
+          OPENCODE_KEY: ${{ secrets.OPENCODE_KEY }}
+        run: |
+          opencode run "The previous step failed. Read the error logs, generate a patch, and push it immediately." --model opencode/big-pickle
