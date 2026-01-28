@@ -1,0 +1,66 @@
+name: The Creator & Solver (Push)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+
+jobs:
+  creator-solver:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      issues: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+           node-version: '20'
+           
+      - name: Install OpenCode
+        run: npm install -g opencode
+
+      - name: Analyze Ecosystem
+        id: analysis
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_COUNT=$(gh issue list --state open --json number -q 'length')
+          # Handle case where no issues exist (returns empty or 0)
+          if [ -z "$ISSUE_COUNT" ]; then ISSUE_COUNT=0; fi
+          echo "issue_count=$ISSUE_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Branch A (Creator Mode)
+        if: steps.analysis.outputs.issue_count < 10
+        env:
+          OPENCODE_KEY: ${{ secrets.OPENCODE_KEY }}
+        run: |
+          opencode run "Analyze repo structure, TODO comments, and user stories. Generate new, non-duplicative issues with detailed specs." --model opencode/gpt-5-nano
+
+      - name: Branch B (Solver Mode)
+        if: steps.analysis.outputs.issue_count >= 10
+        env:
+          OPENCODE_KEY: ${{ secrets.OPENCODE_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Select highest priority issue
+          ISSUE_NUM=$(gh issue list --label critical,high --limit 1 --json number -q '.[0].number')
+          if [ -z "$ISSUE_NUM" ]; then
+             ISSUE_NUM=$(gh issue list --limit 1 --json number -q '.[0].number')
+          fi
+          
+          echo "Solving Issue #$ISSUE_NUM"
+          
+          if [ ! -z "$ISSUE_NUM" ]; then
+            git checkout -b "auto-fix-$ISSUE_NUM"
+            opencode run "Implement solution for Issue #$ISSUE_NUM." --model opencode/big-pickle
+            
+            git config user.name "OpenCode Bot"
+            git config user.email "bot@opencode.ai"
+            git push origin "auto-fix-$ISSUE_NUM"
+            gh pr create --title "Auto-fix Issue #$ISSUE_NUM" --body "Implemented by OpenCode Solver." --base master --head "auto-fix-$ISSUE_NUM"
+          fi
